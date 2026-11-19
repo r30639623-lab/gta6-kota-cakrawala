@@ -1,5 +1,11 @@
 # Kota Cakrawala — Open-World Crime Game
 
+[![make.fun · gta6-01](https://make.fun/badge/gta6-01.svg)](https://make.fun/bounty/gta6-01?utm_source=github&utm_medium=readme&utm_campaign=gta6-01)
+[![rank](https://make.fun/badge/gta6-01/r30639623-lab/gta6-kota-cakrawala/rank.svg)](https://make.fun/bounty/gta6-01/leaderboard?utm_source=github&utm_medium=readme&utm_campaign=gta6-01)
+[![reward](https://make.fun/badge/gta6-01/r30639623-lab/gta6-kota-cakrawala/reward.svg)](https://make.fun/bounty/gta6-01?utm_source=github&utm_medium=readme&utm_campaign=gta6-01)
+
+Entri untuk [Make GTA 6 di make.fun](https://make.fun/bounty/gta6-01).
+
 Game open-world crime 3D original yang dibuat dari nol dengan three.js: kota
 pantai prosedural bernama **Kota Cakrawala**, dimainkan offline di browser
 dari file statis, tanpa network request.
