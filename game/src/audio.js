@@ -15,6 +15,10 @@ export class GameAudio {
     this.sirenGain = null;
     this.sirenOn = false;
     this.sirenTimer = 0;
+    // Round 2: rotor helikopter (noise berdenyut) + denting uang.
+    this.heliNoise = null;
+    this.heliGain = null;
+    this.heliFilter = null;
   }
 
   /** Dipanggil sekali setelah gesture pertama pengguna. */
@@ -31,6 +35,7 @@ export class GameAudio {
     this.master.connect(this.ctx.destination);
     this._startEngineLoop();
     this._startSirenLoop();
+    this._startHeliLoop();
   }
 
   setMuted(muted) {
@@ -86,6 +91,39 @@ export class GameAudio {
     this.sirenOsc.start();
   }
 
+  /** Rotor helikopter: noise lowpass yang berdenyut (wanted 4–5). */
+  _startHeliLoop() {
+    const ctx = this.ctx;
+    const len = ctx.sampleRate * 1;
+    const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
+    this.heliNoise = ctx.createBufferSource();
+    this.heliNoise.buffer = buf;
+    this.heliNoise.loop = true;
+    this.heliFilter = ctx.createBiquadFilter();
+    this.heliFilter.type = 'lowpass';
+    this.heliFilter.frequency.value = 320;
+    this.heliGain = ctx.createGain();
+    this.heliGain.gain.value = 0;
+    this.heliNoise.connect(this.heliFilter);
+    this.heliFilter.connect(this.heliGain);
+    this.heliGain.connect(this.master);
+    this.heliNoise.start();
+  }
+
+  /** Rotor menyala saat helikopter aktif; dipanggil tiap frame. */
+  updateHeli(dt, heliActive) {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    const target = heliActive ? 0.05 : 0;
+    this.heliGain.gain.setTargetAtTime(target, t, 0.3);
+    if (heliActive) {
+      // Denyut rotor: filter membuka-menutup ~13 Hz.
+      this.heliFilter.frequency.setTargetAtTime(220 + Math.abs(Math.sin(t * 13)) * 260, t, 0.05);
+    }
+  }
+
   /** Sirene berbunyi saat wanted > 0; dipanggil tiap frame. */
   updateSiren(dt, wanted) {
     if (!this.ctx) return;
@@ -137,6 +175,38 @@ export class GameAudio {
   }
 
   click() { this._blip(880, 0.07, 'sine', 0.15); }
+  /** Denting uang saat hadiah misi / pembelian garasi. */
+  cash() {
+    this._blip(1320, 0.09, 'sine', 0.2);
+    this._blip(1760, 0.14, 'sine', 0.2, 0.09);
+  }
+  /** Bunyi kunci pas saat upgrade garasi berhasil. */
+  upgrade() {
+    [392, 523, 659].forEach((f, i) => this._blip(f, 0.12, 'triangle', 0.2, i * 0.09));
+    this._noise(0.1, 0.15, 2500, 0.28);
+  }
+  /** Klakson mobil (tombol H saat mengemudi). */
+  horn() {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    for (const f of [370, 466]) {
+      const o = this.ctx.createOscillator();
+      const g = this.ctx.createGain();
+      o.type = 'square';
+      o.frequency.value = f;
+      g.gain.setValueAtTime(0.12, t);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+      o.connect(g);
+      g.connect(this.master);
+      o.start(t);
+      o.stop(t + 0.4);
+    }
+  }
+  /** Jingle ganti stasiun radio. */
+  radioJingle() {
+    this._blip(1047, 0.07, 'sine', 0.14);
+    this._blip(1319, 0.09, 'sine', 0.14, 0.07);
+  }
   pickup() {
     this._blip(660, 0.09, 'sine', 0.22);
     this._blip(990, 0.12, 'sine', 0.22, 0.09);

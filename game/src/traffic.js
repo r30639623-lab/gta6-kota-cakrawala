@@ -14,8 +14,13 @@ function randomRoad(rng) { return ROADS[Math.floor(rng() * ROADS.length)]; }
 /** Satu mobil lalu lintas: posisi, arah sumbu jalan, kecepatan. */
 class TrafficCar {
   constructor(scene, rng) {
-    this.car = makeCar(rng() < 0.25 ? 'pickup' : 'sedan');
+    // Ragam kendaraan kota: sedan, pickup, taksi kuning, van pasar.
+    const roll = rng();
+    const kind = roll < 0.18 ? 'taxi' : roll < 0.32 ? 'van' : roll < 0.52 ? 'pickup' : 'sedan';
+    const color = kind === 'taxi' ? 0xd4ac0d : undefined;
+    this.car = makeCar(kind, color);
     this.car.userData.speed = 0;
+    this.kind = kind;
     this.axis = rng() < 0.5 ? 'x' : 'z'; // jalan yang dilalui
     this.line = randomRoad(rng);
     this.dir = rng() < 0.5 ? 1 : -1;
@@ -99,16 +104,46 @@ class TrafficCar {
 class Pedestrian {
   constructor(scene, rng) {
     this.group = new THREE.Group();
-    const shirtColors = [0xe74c3c, 0x3498db, 0xf1c40f, 0x9b59b6, 0x1abc9c, 0xecf0f1, 0xe67e22];
+    const shirtColors = [0xe74c3c, 0x3498db, 0xf1c40f, 0x9b59b6, 0x1abc9c, 0xecf0f1, 0xe67e22, 0x2ecc71, 0xfd79a8, 0x00cec9];
+    const skinTones = [0xe8b98a, 0xc98d5f, 0x8d5524, 0xffdbac];
     const shirt = new THREE.MeshLambertMaterial({ color: shirtColors[Math.floor(rng() * shirtColors.length)] });
-    const skin = new THREE.MeshLambertMaterial({ color: 0xe8b98a });
-    const pants = new THREE.MeshLambertMaterial({ color: 0x2c3e50 });
+    const skin = new THREE.MeshLambertMaterial({ color: skinTones[Math.floor(rng() * skinTones.length)] });
+    const pantsColors = [0x2c3e50, 0x5d4037, 0x37474f, 0x6d4c41, 0x1a237e];
+    const pants = new THREE.MeshLambertMaterial({ color: pantsColors[Math.floor(rng() * pantsColors.length)] });
+    // Variasi warga: tinggi badan, topi, pelari (jogger), dan ibu-ibu berdaster.
+    this.variant = rng() < 0.16 ? 'jogger' : rng() < 0.14 ? 'elder' : 'walker';
+    const heightScale = this.variant === 'elder' ? 0.88 : 0.94 + rng() * 0.18;
     const body = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.75, 0.32), shirt);
     body.position.y = 1.05;
     body.castShadow = true;
     const head = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.36, 0.36), skin);
     head.position.y = 1.62;
     head.castShadow = true;
+    // Topi / kerudung / rambut: variasi kepala warga kota.
+    const headRoll = rng();
+    if (headRoll < 0.22) {
+      const hat = new THREE.Mesh(
+        new THREE.BoxGeometry(0.42, 0.1, 0.42),
+        new THREE.MeshLambertMaterial({ color: 0xf1c40f }),
+      );
+      hat.position.y = 1.84;
+      this.group.add(hat);
+    } else if (headRoll < 0.42) {
+      const hair = new THREE.Mesh(
+        new THREE.BoxGeometry(0.4, 0.14, 0.4),
+        new THREE.MeshLambertMaterial({ color: 0x2d1a0e }),
+      );
+      hair.position.y = 1.82;
+      this.group.add(hair);
+    } else if (headRoll < 0.55) {
+      const scarf = new THREE.Mesh(
+        new THREE.BoxGeometry(0.42, 0.5, 0.42),
+        new THREE.MeshLambertMaterial({ color: [0xd63384, 0x1abc9c, 0x8e44ad][Math.floor(rng() * 3)] }),
+      );
+      scarf.position.y = 1.62;
+      this.group.add(scarf);
+    }
+    this.group.scale.setScalar(heightScale);
     this.legL = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.65, 0.22), pants);
     this.legL.position.set(0, 0.33, 0.14);
     this.legR = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.65, 0.22), pants);
@@ -124,7 +159,7 @@ class Pedestrian {
       0,
       this.axis === 'x' ? this.line + this.side : along,
     );
-    this.speed = 1.2 + rng() * 0.9;
+    this.speed = this.variant === 'jogger' ? 2.6 + rng() * 0.8 : this.variant === 'elder' ? 0.8 + rng() * 0.3 : 1.2 + rng() * 0.9;
     this.heading = this.axis === 'x' ? (this.dir > 0 ? Math.PI / 2 : -Math.PI / 2) : (this.dir > 0 ? 0 : Math.PI);
     this.walkPhase = rng() * Math.PI * 2;
     this.down = false; // jatuh (dipukul / ditabrak)
@@ -235,5 +270,19 @@ export class TrafficSystem {
       if (p.pos.distanceTo(pos) < radius) hit.push(p);
     }
     return hit;
+  }
+
+  /** Hitung kendaraan per jenis (untuk debug & HUD kota hidup). */
+  countByKind() {
+    const counts = { sedan: 0, pickup: 0, taxi: 0, van: 0 };
+    for (const c of this.cars) counts[c.kind || 'sedan'] = (counts[c.kind || 'sedan'] || 0) + 1;
+    return counts;
+  }
+
+  /** Jumlah pejalan kaki per varian (walker / jogger / elder). */
+  countPedsByVariant() {
+    const counts = { walker: 0, jogger: 0, elder: 0 };
+    for (const p of this.peds) counts[p.variant || 'walker'] = (counts[p.variant || 'walker'] || 0) + 1;
+    return counts;
   }
 }

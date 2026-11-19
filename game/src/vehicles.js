@@ -24,7 +24,7 @@ function makeWheel() {
 }
 
 /**
- * Bangun satu mobil. kind: 'sport' | 'pickup' | 'sedan' | 'police'.
+ * Bangun satu mobil. kind: 'sport' | 'pickup' | 'sedan' | 'police' | 'taxi' | 'van'.
  * Mengembalikan Group dengan userData { wheels, brakeLights, headlights, length, width }.
  */
 export function makeCar(kind = 'sedan', color = null) {
@@ -34,11 +34,13 @@ export function makeCar(kind = 'sedan', color = null) {
   const glassMat = new THREE.MeshPhongMaterial({ color: 0x1a2836, shininess: 90, specular: 0x88aacc });
   const isPickup = kind === 'pickup';
   const isPolice = kind === 'police';
+  const isTaxi = kind === 'taxi';
+  const isVan = kind === 'van';
   // Mobil menghadap +Z lokal: panjang di sumbu Z, lebar di sumbu X.
   // (rotation.y = heading lalu cocok dengan arah gerak (sin h, cos h).)
-  const bodyLen = kind === 'sport' ? 4.4 : isPickup ? 5.0 : 4.2;
-  const bodyWid = 2.0;
-  const bodyH = kind === 'sport' ? 0.62 : 0.78;
+  const bodyLen = kind === 'sport' ? 4.4 : isPickup ? 5.0 : isVan ? 5.4 : 4.2;
+  const bodyWid = isVan ? 2.2 : 2.0;
+  const bodyH = kind === 'sport' ? 0.62 : isVan ? 1.15 : 0.78;
 
   // Bodi utama.
   const body = new THREE.Mesh(new THREE.BoxGeometry(bodyWid, bodyH, bodyLen), bodyMat);
@@ -60,6 +62,12 @@ export function makeCar(kind = 'sedan', color = null) {
     cab.position.set(0, 1.28, 0.55);
     cab.castShadow = true;
     car.add(cab);
+  } else if (isVan) {
+    // Van: kabin tinggi menyatu dengan bodi (angkutan pasar / travel).
+    const cabin = new THREE.Mesh(new THREE.BoxGeometry(bodyWid - 0.2, 0.9, bodyLen - 1.2), glassMat);
+    cabin.position.set(0, 1.5, -0.2);
+    cabin.castShadow = true;
+    car.add(cabin);
   } else {
     // Kabin kaca.
     const cabin = new THREE.Mesh(new THREE.BoxGeometry(bodyWid - 0.28, 0.66, 2.1), glassMat);
@@ -98,6 +106,22 @@ export function makeCar(kind = 'sedan', color = null) {
     car.add(b);
   }
 
+  // Taksi Cakrawala: papan "TAKSI" kuning di atap + garis hitam.
+  if (isTaxi) {
+    const sign = new THREE.Mesh(
+      new THREE.BoxGeometry(0.9, 0.28, 0.4),
+      new THREE.MeshBasicMaterial({ color: 0xffe600 }),
+    );
+    sign.position.set(0, 1.72, -0.25);
+    car.add(sign);
+    const stripe = new THREE.Mesh(
+      new THREE.BoxGeometry(bodyWid + 0.02, 0.1, bodyLen * 0.5),
+      new THREE.MeshLambertMaterial({ color: 0x1a1a1a }),
+    );
+    stripe.position.set(0, 0.95, -0.2);
+    car.add(stripe);
+  }
+
   // Mobil polisi: bodi hitam-putih + light bar merah-biru di atap.
   if (isPolice) {
     const stripe = new THREE.Mesh(new THREE.BoxGeometry(bodyWid + 0.02, 0.06, bodyLen * 0.55), new THREE.MeshLambertMaterial({ color: 0xf5f5f5 }));
@@ -124,6 +148,8 @@ export function makeCar(kind = 'sedan', color = null) {
     width: bodyWid,
     speed: 0,
     steer: 0,
+    // Tuning garasi (diisi Garage.applyToCar): bonus kecepatan, nitro, armor.
+    tuning: { topSpeedBonus: 0, nitro: false, armourFactor: 1 },
   };
   return car;
 }
@@ -156,7 +182,11 @@ export function driveCar(car, state, input, dt, colliders, bounds) {
   const steerInput = input.strafeAxis(); // A/D
   const handbrake = input.down('Space');
 
-  const maxSpeed = u.kind === 'sport' ? 42 : u.kind === 'police' ? 40 : 34;
+  const maxSpeedBase = u.kind === 'sport' ? 42 : u.kind === 'police' ? 40 : u.kind === 'van' ? 30 : 34;
+  const tuning = u.tuning || { topSpeedBonus: 0, nitro: false, armourFactor: 1 };
+  // Nitro: tahan Shift saat mengemudi = +9 kecepatan puncak (kalau dibeli di garasi).
+  const nitroBoost = tuning.nitro && (input.down('ShiftLeft') || input.down('ShiftRight')) ? 9 : 0;
+  const maxSpeed = maxSpeedBase + tuning.topSpeedBonus + nitroBoost;
   const maxReverse = 12;
   if (throttle > 0) state.speed += 20 * dt * (1 - Math.max(0, state.speed) / maxSpeed);
   if (throttle < 0) {

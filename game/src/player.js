@@ -37,6 +37,50 @@ export class Player {
     this.moving = false;
     this.punchTimer = 0; // animasi pukulan sedang jalan
     this.punchCooldown = 0;
+    // Round 2 — nyawa & lapis baja: polisi yang menabrak mengurangi nyawa.
+    this.health = 100;
+    this.armour = 0; // 0–100, dari garasi (lapis baja) atau pickup
+    this.dead = false;
+    this.regenTimer = 0;
+    this.onDeath = null; // () — main.js: respawn di rumah sakit
+    this.onDamage = null; // (amount) — HUD flash
+  }
+
+  /** Terima damage: lapis baja menyerap dulu, sisanya ke nyawa. */
+  damage(amount, armourFactor = 1) {
+    if (this.dead) return 0;
+    const reduced = amount * armourFactor;
+    let rest = reduced;
+    if (this.armour > 0) {
+      const absorbed = Math.min(this.armour, rest);
+      this.armour -= absorbed;
+      rest -= absorbed;
+    }
+    this.health = Math.max(0, this.health - rest);
+    this.regenTimer = 0;
+    if (this.onDamage) this.onDamage(rest);
+    if (this.health <= 0) {
+      this.dead = true;
+      if (this.onDeath) this.onDeath();
+    }
+    return rest;
+  }
+
+  /** Pulihkan nyawa (rumah sakit / misi selesai) & isi lapis baja. */
+  heal(amount) {
+    this.health = Math.min(100, this.health + amount);
+    if (this.health > 0) this.dead = false;
+  }
+
+  addArmour(amount) {
+    this.armour = Math.min(100, this.armour + amount);
+  }
+
+  /** Regen pelan saat lama tidak kena damage (10 dtk tenang = +2/dtk). */
+  _regen(dt) {
+    if (this.dead || this.health >= 100) return;
+    this.regenTimer += dt;
+    if (this.regenTimer > 10) this.health = Math.min(100, this.health + dt * 2);
   }
 
   spawn(pos, heading = 0) {
@@ -48,6 +92,8 @@ export class Player {
 
   /** Gerak jalan kaki. cameraYaw = arah kamera (radian). */
   update(dt, input, cameraYaw, colliders, bounds) {
+    this._regen(dt);
+    if (this.dead) return; // menunggu respawn dari main.js
     const fwd = input.moveAxis();
     const strafe = input.strafeAxis();
     const running = input.down('ShiftLeft') || input.down('ShiftRight');
@@ -113,4 +159,14 @@ export class Player {
 
   hide() { this.group.visible = false; }
   show() { this.group.visible = true; }
+
+  /** Respawn di rumah sakit setelah mati: nyawa penuh, wanted hilang. */
+  respawn(pos, heading = 0) {
+    this.health = 100;
+    this.armour = 0;
+    this.dead = false;
+    this.regenTimer = 0;
+    this.spawn(pos, heading);
+    this.show();
+  }
 }

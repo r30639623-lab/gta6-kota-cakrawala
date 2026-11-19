@@ -12,6 +12,8 @@ export const MISSIONS = [
     title: 'Misi 1 — Paket Bu Sari',
     giver: 'Bu Sari',
     brief: 'Antar paket ini ke dermaga pelabuhan sebelum kapal berangkat. Jangan sampai telat, Raka!',
+    quote: 'Bu Sari: "Paket ini isinya suku cadang langka. Hati-hati di jalan, jangan ugal-ugalan!"',
+    type: 'delivery',
     target: PLACES.harbor,
     targetName: 'Dermaga Pelabuhan',
     timeLimit: 100,
@@ -22,6 +24,8 @@ export const MISSIONS = [
     title: 'Misi 2 — Paket Panas',
     giver: 'Bu Sari',
     brief: 'Paketnya... bermasalah. Polisi sudah mengepung pelabuhan! Ambil paketnya lalu kabur ke bengkel. Jangan sampai ketangkap!',
+    quote: 'Bu Sari: "Jangan tanya isi paketnya. Ambil, lalu lari. Kalau ketangkap, aku tidak kenal kamu!"',
+    type: 'escape',
     target: PLACES.workshop,
     targetName: 'Bengkel Bu Sari',
     timeLimit: 75,
@@ -33,6 +37,8 @@ export const MISSIONS = [
     title: 'Misi 3 — Balapan Pulang',
     giver: 'Bu Sari',
     brief: 'Utangmu lunas kalau menang balapan ini! Lewati 3 checkpoint lalu finis di bengkel. Polisi ikut mengejar — gas pol, Raka!',
+    quote: 'Bu Sari: "Menang balapan ini, utangmu lunas. Kalah... ya kerja lembur sebulan!"',
+    type: 'race',
     target: PLACES.workshop,
     targetName: 'Bengkel Bu Sari',
     timeLimit: 90,
@@ -44,7 +50,109 @@ export const MISSIONS = [
       new THREE.Vector3(240, 0, 240),
     ],
   },
+  {
+    id: 'm4',
+    title: 'Misi 4 — Kejar-Kejaran Tengah Malam',
+    giver: 'Bu Sari',
+    brief: 'Paket ini harus sampai ke menara sebelum tengah malam — dan polisi sudah mengendus! Wanted 4 bintang, ada helikopter di atasmu. Jangan berhenti, Raka!',
+    quote: 'Bu Sari: "Helikopter sudah naik, nak. Jangan panik — belok tajam di persimpangan, mereka bingung sendiri!"',
+    type: 'escape',
+    target: PLACES.tower,
+    targetName: 'Menara Cakrawala',
+    timeLimit: 110,
+    reward: 500,
+    wantedOnStart: 4,
+    checkpoints: [
+      new THREE.Vector3(0, 0, 240),
+      new THREE.Vector3(180, 0, 60),
+    ],
+  },
+  {
+    id: 'm5',
+    title: 'Misi 5 — Pasar Pagi Bu Sari',
+    giver: 'Bu Sari',
+    brief: 'Sayur & suku cadang buat pasar pagi harus sampai sebelum jam 8! Antar ke Pasar Cakrawala lewat alun-alun. Pelan-pelan di keramaian, jangan nabrak dagangan!',
+    quote: 'Bu Sari: "Pedagang pasar sudah menunggu. Kalau telat, mereka beli ke bengkel sebelah — jangan sampai!"',
+    type: 'delivery',
+    target: PLACES.market,
+    targetName: 'Pasar Cakrawala',
+    timeLimit: 100,
+    reward: 350,
+    checkpoints: [
+      new THREE.Vector3(30, 0, -30),
+    ],
+  },
+  {
+    id: 'm6',
+    title: 'Misi 6 — Balapan Menara',
+    giver: 'Bu Sari',
+    brief: 'Anak-anak bengkel sebelah menantangmu balapan keliling kota! Lewati 3 checkpoint lalu finis di Menara Cakrawala. Hadiahnya besar — jangan malu-maluin bengkel kita!',
+    quote: 'Bu Sari: "Mereka bilang Kancil GT cuma mobil sayur. Buktikan mereka salah, Raka!"',
+    type: 'race',
+    target: PLACES.tower,
+    targetName: 'Menara Cakrawala',
+    timeLimit: 120,
+    reward: 600,
+    wantedOnStart: 2,
+    checkpoints: [
+      new THREE.Vector3(-240, 0, 0),
+      new THREE.Vector3(0, 0, -240),
+      new THREE.Vector3(240, 0, 120),
+    ],
+  },
+  {
+    id: 'm7',
+    title: 'Misi 7 — Penyelamatan di Pantai',
+    giver: 'Bu Sari',
+    brief: 'Teman lama Bu Sari mogok di pantai timur! Jemput dia di pantai, lalu antar ke pelabuhan sebelum kapalnya berangkat. Waktu mepet — bawa Kancil GT-mu!',
+    quote: 'Bu Sari: "Dia nelayan tua yang dulu menolongku. Jangan biarkan dia ketinggalan kapal, Raka."',
+    type: 'rescue',
+    target: PLACES.harbor,
+    targetName: 'Dermaga Pelabuhan',
+    timeLimit: 115,
+    reward: 550,
+    checkpoints: [
+      new THREE.Vector3(370, 0, 0),
+    ],
+  },
+  {
+    id: 'm8',
+    title: 'Misi 8 — Final: Utang Lunas',
+    giver: 'Bu Sari',
+    brief: 'INI DIA, RAKA! Balapan terakhir keliling seluruh Kota Cakrawala: 4 checkpoint, polisi di mana-mana, finis di bengkel. Menang = utangmu LUNAS dan bengkel ini jadi milikmu separuh!',
+    quote: 'Bu Sari: "Delapan misi, satu kota, satu utang. Selesaikan ini dan kau bukan lagi kurirku — kau partnerku."',
+    type: 'finale',
+    target: PLACES.workshop,
+    targetName: 'Bengkel Bu Sari',
+    timeLimit: 150,
+    reward: 1000,
+    wantedOnStart: 3,
+    checkpoints: [
+      new THREE.Vector3(240, 0, -240),
+      new THREE.Vector3(-240, 0, -240),
+      new THREE.Vector3(370, 0, 0),
+      new THREE.Vector3(150, 0, 360),
+    ],
+  },
 ];
+
+/** Total hadiah semua misi & jumlah misi (untuk menu & HUD tracker). */
+export const TOTAL_MISSIONS = MISSIONS.length;
+export const TOTAL_REWARD = MISSIONS.reduce((a, m) => a + m.reward, 0);
+export const TOTAL_STARS = MISSIONS.length * 3;
+
+/** Label tipe misi untuk tracker HUD. */
+export const MISSION_TYPE_LABEL = {
+  delivery: '📦 Antar',
+  escape: '🚨 Kabur',
+  race: '🏁 Balapan',
+  rescue: '🛟 Selamatkan',
+  finale: '👑 Final',
+};
+
+export function missionTypeLabel(def) {
+  return MISSION_TYPE_LABEL[def.type || 'delivery'] || '📦 Misi';
+}
 
 export class MissionSystem {
   constructor(scene) {
@@ -188,6 +296,29 @@ export class MissionSystem {
   abort() {
     this.active = null;
     this.beacon.visible = false;
+  }
+
+  /** Daftar misi untuk tracker HUD: judul, tipe, reward, status selesai. */
+  missionList(doneMap) {
+    return MISSIONS.map((def, i) => ({
+      index: i,
+      id: def.id,
+      title: def.title,
+      typeLabel: missionTypeLabel(def),
+      reward: def.reward,
+      done: !!(doneMap && doneMap[def.id]),
+      current: i === this.nextIndex && !this.active,
+      active: !!(this.active && this.active.def.id === def.id),
+    }));
+  }
+
+  /** Misi yang sedang aktif + checkpoint ke berapa (untuk tracker). */
+  get activeProgress() {
+    if (!this.active) return null;
+    const def = this.active.def;
+    const total = (def.checkpoints ? def.checkpoints.length : 0) + 1;
+    const done = def.checkpoints ? this.active.checkpointIndex : 0;
+    return { def, checkpointDone: done, checkpointTotal: total, timeLeft: this.active.timeLeft };
   }
 
   /** Label tujuan aktif untuk HUD/minimap (null kalau tidak ada misi). */

@@ -34,6 +34,10 @@ export const PLACES = {
   plaza: new THREE.Vector3(30, 0, -30),         // alun-alun tengah kota
   beach: new THREE.Vector3(370, 0, 0),          // pantai timur
   spawn: new THREE.Vector3(-240, 0, 240),       // spawn awal Raka (dekat bengkel)
+  tower: new THREE.Vector3(210, 0, -210),       // Menara Cakrawala (timur laut)
+  market: new THREE.Vector3(-150, 0, 150),      // Pasar Cakrawala (barat tengah)
+  hospital: new THREE.Vector3(210, 0, 210),     // Rumah Sakit Cakrawala (tenggara)
+  garage: new THREE.Vector3(-258, 0, 258),      // pintu garasi bengkel Bu Sari
 };
 
 /** Gambar tekstur tanah kota: trotoar, aspal, marka jalan, zebra cross. */
@@ -143,6 +147,7 @@ export function createCity(scene, seed = 1) {
   const rng = createRandom(seed);
   const colliders = []; // {minX,maxX,minZ,maxZ} — gedung, kontainer, crane
   const buildingMaterials = [];
+  const neonMats = []; // material neon — digelapkan siang, menyala senja/malam
   const clouds = [];
   let lampHeadMat = null;
   let seaMesh = null;
@@ -227,6 +232,7 @@ export function createCity(scene, seed = 1) {
   boxGeo.translate(0, 0.5, 0); // alas di y=0
   const textures = FACADE_COLORS.map((c) => makeBuildingTextures(c, 0.45));
   const parkBlocks = new Set(['30,-30', '-90,90', '150,-150']);
+  const civicBlocks = new Set(['210,-210', '-150,150', '210,210']); // menara, pasar, rumah sakit
   const blockCenters = [];
   for (let bx = -270; bx <= 270; bx += 60) {
     for (let bz = -270; bz <= 270; bz += 60) blockCenters.push([bx, bz]);
@@ -234,6 +240,7 @@ export function createCity(scene, seed = 1) {
   for (const [bx, bz] of blockCenters) {
     const key = `${bx},${bz}`;
     if (key === '-270,270') continue; // blok bengkel Bu Sari
+    if (civicBlocks.has(key)) continue; // blok civic: menara / pasar / rumah sakit (dibangun di bawah)
     if (parkBlocks.has(key)) {
       // Taman: rumput + palem.
       const lawn = new THREE.Mesh(
@@ -257,7 +264,7 @@ export function createCity(scene, seed = 1) {
     for (let i = 0; i < count; i++) {
       const w = 14 + rng() * 12;
       const d = 14 + rng() * 12;
-      const h = tall ? 26 + rng() * 44 : 10 + rng() * 20;
+      const h = distCenter < 70 ? 44 + rng() * 40 : tall ? 26 + rng() * 44 : 10 + rng() * 20;
       const ox = count === 2 ? (i === 0 ? -9 : 9) : 0;
       const oz = count === 2 ? (i === 0 ? -9 : 9) : 0;
       const tex = textures[Math.floor(rng() * textures.length)];
@@ -285,6 +292,44 @@ export function createCity(scene, seed = 1) {
         minX: b.position.x - hw, maxX: b.position.x + hw,
         minZ: b.position.z - hd, maxZ: b.position.z + hd,
       });
+      // Variasi atap: kotak AC, antena, dan papan neon warna-warni.
+      const topY = h;
+      if (rng() < 0.45) {
+        const ac = new THREE.Mesh(
+          new THREE.BoxGeometry(3, 1.4, 2.4),
+          new THREE.MeshLambertMaterial({ color: 0x8a929c }),
+        );
+        ac.position.set(b.position.x + (rng() - 0.5) * w * 0.4, topY + 0.7, b.position.z + (rng() - 0.5) * d * 0.4);
+        ac.castShadow = true;
+        scene.add(ac);
+      }
+      if (rng() < 0.22) {
+        const antenna = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.12, 0.2, 7 + rng() * 6, 5),
+          new THREE.MeshLambertMaterial({ color: 0x555c66 }),
+        );
+        antenna.position.set(b.position.x, topY + 4, b.position.z);
+        scene.add(antenna);
+        const tip = new THREE.Mesh(
+          new THREE.SphereGeometry(0.35, 6, 5),
+          new THREE.MeshBasicMaterial({ color: 0xff3344 }),
+        );
+        tip.position.set(b.position.x, topY + 7.5, b.position.z);
+        scene.add(tip);
+        neonMats.push(tip.material);
+      }
+      if (rng() < 0.3 && h > 18) {
+        // Papan neon vertikal di fasad gedung tinggi (menyala saat senja/malam).
+        const neonColors = [0xff2e88, 0x00e5ff, 0xffe600, 0x7cff4d, 0xff7a00];
+        const neonMat = new THREE.MeshBasicMaterial({ color: neonColors[Math.floor(rng() * neonColors.length)] });
+        neonMats.push(neonMat);
+        const neon = new THREE.Mesh(new THREE.BoxGeometry(1.2, 6 + rng() * 6, 0.5), neonMat);
+        neon.position.set(b.position.x + hw + 0.4, topY * 0.55, b.position.z);
+        scene.add(neon);
+        const neon2 = new THREE.Mesh(new THREE.BoxGeometry(0.5, 3, 1.2), neonMat);
+        neon2.position.set(b.position.x, topY * 0.55, b.position.z + hd + 0.4);
+        scene.add(neon2);
+      }
     }
   }
 
@@ -313,6 +358,80 @@ export function createCity(scene, seed = 1) {
   door.position.set(PLACES.workshop.x - 6, 3, PLACES.workshop.z - 10.05);
   door.rotation.y = Math.PI;
   scene.add(door);
+
+  // --- Menara Cakrawala: landmark tertinggi kota (misi 4, 6, 8) ---
+  const towerMat = new THREE.MeshLambertMaterial({ color: 0x5d6d7e });
+  const tower = new THREE.Mesh(boxGeo, towerMat);
+  tower.scale.set(22, 86, 22);
+  tower.position.set(PLACES.tower.x, 0, PLACES.tower.z);
+  tower.castShadow = true;
+  tower.receiveShadow = true;
+  scene.add(tower);
+  colliders.push({ minX: PLACES.tower.x - 11, maxX: PLACES.tower.x + 11, minZ: PLACES.tower.z - 11, maxZ: PLACES.tower.z + 11 });
+  const towerTop = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.5, 3, 12, 8),
+    new THREE.MeshLambertMaterial({ color: 0x2c3e50 }),
+  );
+  towerTop.position.set(PLACES.tower.x, 92, PLACES.tower.z);
+  scene.add(towerTop);
+  const towerBeacon = new THREE.Mesh(
+    new THREE.SphereGeometry(1.1, 8, 6),
+    new THREE.MeshBasicMaterial({ color: 0xff3344 }),
+  );
+  towerBeacon.position.set(PLACES.tower.x, 99, PLACES.tower.z);
+  scene.add(towerBeacon);
+  neonMats.push(towerBeacon.material);
+  // Cincin neon di badan menara (menyala saat senja/malam).
+  for (const ringY of [30, 52, 74]) {
+    const ringMat = new THREE.MeshBasicMaterial({ color: 0x00e5ff });
+    neonMats.push(ringMat);
+    const ring = new THREE.Mesh(new THREE.BoxGeometry(23.2, 1.0, 23.2), ringMat);
+    ring.position.set(PLACES.tower.x, ringY, PLACES.tower.z);
+    scene.add(ring);
+  }
+
+  // --- Pasar Cakrawala: deretan kios warna-warni + tenda (misi 5) ---
+  const stallColors = [0xe74c3c, 0xf39c12, 0x27ae60, 0x8e44ad, 0x2980b9];
+  for (let i = 0; i < 8; i++) {
+    const sx = PLACES.market.x - 18 + (i % 4) * 12;
+    const sz = PLACES.market.z - 12 + Math.floor(i / 4) * 22;
+    const stall = new THREE.Mesh(
+      boxGeo,
+      new THREE.MeshLambertMaterial({ color: stallColors[i % stallColors.length] }),
+    );
+    stall.scale.set(7, 3.2, 5);
+    stall.position.set(sx, 0, sz);
+    stall.castShadow = true;
+    scene.add(stall);
+    const roof = new THREE.Mesh(
+      new THREE.ConeGeometry(5.2, 2.6, 4),
+      new THREE.MeshLambertMaterial({ color: 0xf5f0e1 }),
+    );
+    roof.position.set(sx, 4.4, sz);
+    roof.rotation.y = Math.PI / 4;
+    scene.add(roof);
+    colliders.push({ minX: sx - 3.5, maxX: sx + 3.5, minZ: sz - 2.5, maxZ: sz + 2.5 });
+  }
+
+  // --- Rumah Sakit Cakrawala: gedung putih + palang merah (titik respawn) ---
+  const hospital = new THREE.Mesh(
+    boxGeo,
+    new THREE.MeshLambertMaterial({ color: 0xf2f4f6 }),
+  );
+  hospital.scale.set(30, 20, 18);
+  hospital.position.set(PLACES.hospital.x, 0, PLACES.hospital.z);
+  hospital.castShadow = true;
+  hospital.receiveShadow = true;
+  scene.add(hospital);
+  colliders.push({ minX: PLACES.hospital.x - 15, maxX: PLACES.hospital.x + 15, minZ: PLACES.hospital.z - 9, maxZ: PLACES.hospital.z + 9 });
+  const crossMat = new THREE.MeshBasicMaterial({ color: 0xff2a2a });
+  neonMats.push(crossMat);
+  const crossV = new THREE.Mesh(new THREE.BoxGeometry(2.2, 6, 0.6), crossMat);
+  crossV.position.set(PLACES.hospital.x, 23, PLACES.hospital.z - 9.4);
+  scene.add(crossV);
+  const crossH = new THREE.Mesh(new THREE.BoxGeometry(6, 2.2, 0.6), crossMat);
+  crossH.position.set(PLACES.hospital.x, 23, PLACES.hospital.z - 9.4);
+  scene.add(crossH);
 
   // --- Pelabuhan: dermaga beton, kontainer warna-warni, crane, kapal ---
   // Dermaga beton rendah (permukaan hampir rata dengan tanah supaya Raka
@@ -434,9 +553,28 @@ export function createCity(scene, seed = 1) {
     clouds.push(cloud);
   }
 
-  // --- Waktu dalam game: siang cerah vs senja ---
+  // --- Waktu dalam game: siang cerah vs senja vs malam neon ---
   function setTimeOfDay(mode) {
-    if (mode === 'dusk') {
+    // Neon: siang redup, senja/malam menyala penuh.
+    const neonOn = mode !== 'day';
+    for (const m of neonMats) m.color.multiplyScalar(1); // warna dasar tetap
+    if (mode === 'night') {
+      // Malam neon: langit gelap berbintang, lampu & jendela menyala terang.
+      sun.position.set(-180, 260, 120);
+      sun.color.set(0x8fa8ff);
+      sun.intensity = 1.3;
+      hemi.intensity = 0.62;
+      hemi.color.set(0x3a4a7a);
+      skyUniforms.topColor.value.set(0x0a0f2a);
+      skyUniforms.horizonColor.value.set(0x2a1e4a);
+      skyUniforms.sunDir.value.set(-0.5, 0.7, 0.3).normalize();
+      skyUniforms.sunColor.value.set(0xdde6ff);
+      scene.fog.color.set(0x141a33);
+      scene.fog.near = 280;
+      scene.fog.far = 950;
+      for (const m of buildingMaterials) m.emissiveIntensity = 1.6;
+      lampHeadMat.color.set(0xffe9a8);
+    } else if (mode === 'dusk') {
       // Senja: matahari rendah & jingga, langit ungu-jingga, lampu menyala.
       sun.position.set(-320, 90, 180);
       sun.color.set(0xff9a4d);
@@ -468,6 +606,12 @@ export function createCity(scene, seed = 1) {
       scene.fog.far = 1300;
       for (const m of buildingMaterials) m.emissiveIntensity = 0.0;
       lampHeadMat.color.set(0x555555);
+    }
+    // Neon menyala hanya saat senja/malam (siang: redup jadi abu).
+    for (const m of neonMats) {
+      if (m.userData.baseColor === undefined) m.userData.baseColor = m.color.clone();
+      if (neonOn) m.color.copy(m.userData.baseColor);
+      else m.color.copy(m.userData.baseColor).multiplyScalar(0.45);
     }
   }
 

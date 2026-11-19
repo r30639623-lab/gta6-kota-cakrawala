@@ -4,12 +4,14 @@
 // screenshots/ from beside this file to /output and writes /output/dossier.json, the summary the
 // judge reads, with the vendored make.fun library.
 //
-// The game handed in here is "Kota Cakrawala", a 3D open-world crime game built for this entry
+// The game handed in here is "Kota Cakrawala" (round 2 — 8 misi, helikopter polisi, radio & garasi),
+// a 3D open-world crime game built for this entry
 // (three.js vendored under game/vendor/): Raka the courier walks and drives through a sun-soaked
 // procedural coastal city, steals cars, dodges traffic and pedestrians, earns wanted stars and
-// police chases, and runs 3 story missions for Bu Sari the garage owner — with a HUD, minimap,
-// procedural WebAudio sound, a save in localStorage, and staged ?shot= screenshots (cover at
-// dusk with a 3-star police chase, daytime driving, the harbour delivery, and the start screen).
+// police chases (including a helicopter at 4–5 stars and roadblocks), and runs 8 story missions
+// for Bu Sari the garage owner — with a rich HUD, minimap, procedural WebAudio sound and radio,
+// a garage with car upgrades, a save in localStorage, and staged ?shot= screenshots (cover at
+// dusk with a 4-star police chase + helicopter, night neon driving, the market delivery, and the start screen).
 // The starter Block Dodger 2D game is gone; every game file under game/src/ was written for
 // this entry, split by system (city, vehicles, traffic, police, missions, player, hud, audio,
 // input, save, shots) so the judge's source outline reads like the game plays.

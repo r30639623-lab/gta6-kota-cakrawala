@@ -1,6 +1,8 @@
 // input.js — Keyboard + mouse untuk Kota Cakrawala.
 // WASD gerak, Shift lari, E masuk/keluar mobil & interaksi, F pukul,
-// Spasi rem tangan, Esc/P pause, M bisu. Mouse: drag untuk mengorbit kamera.
+// Spasi rem tangan, Esc/P pause, M bisu. Round 2: R ganti stasiun radio,
+// G buka garasi Bu Sari (di depan pintu garasi), H klakson saat mengemudi.
+// Mouse: drag untuk mengorbit kamera.
 export class Input {
   constructor(canvas) {
     this.keys = new Set();
@@ -59,6 +61,14 @@ export class Input {
   down(code) { return this.keys.has(code); }
   /** True hanya pada frame saat tombol ditekan (sekali per tekanan). */
   tapped(code) { return this.pressed.has(code); }
+
+  /** True kalau salah satu dari daftar tombol baru ditekan frame ini. */
+  tappedAny(...codes) { return codes.some((c) => this.pressed.has(c)); }
+
+  /** Pintasan round 2: R = radio, G = garasi, H = klakson. */
+  tappedRadio() { return this.tapped('KeyR'); }
+  tappedGarage() { return this.tapped('KeyG'); }
+  tappedHorn() { return this.tapped('KeyH'); }
 
   /** Gerak maju/mundur dari tombol (W/S atau panah), -1..1. */
   moveAxis() {
