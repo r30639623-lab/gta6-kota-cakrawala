@@ -1,53 +1,90 @@
-// Keyboard and pointer input. Held keys give a steering direction; one-shot presses (start or
-// restart, pause) are queued as bit flags and taken once by the loop, so a press between two
-// frames is never lost and never counted twice.
+// input.js — Keyboard + mouse untuk Kota Cakrawala.
+// WASD gerak, Shift lari, E masuk/keluar mobil & interaksi, F pukul,
+// Spasi rem tangan, Esc/P pause, M bisu. Mouse: drag untuk mengorbit kamera.
+export class Input {
+  constructor(canvas) {
+    this.keys = new Set();
+    this.pressed = new Set(); // tombol yang baru ditekan sejak frame terakhir
+    this.mouseDX = 0;
+    this.mouseDY = 0;
+    this.dragging = false;
+    this.lastX = 0;
+    this.lastY = 0;
+    this.anyGesture = false; // true setelah interaksi pertama (untuk menyalakan audio)
 
-export const ACTION_CONFIRM = 1;
-export const ACTION_PAUSE = 2;
+    window.addEventListener('keydown', (e) => {
+      if (e.repeat) return;
+      this.keys.add(e.code);
+      this.pressed.add(e.code);
+      this.anyGesture = true;
+      if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) {
+        e.preventDefault();
+      }
+    });
+    window.addEventListener('keyup', (e) => this.keys.delete(e.code));
+    window.addEventListener('blur', () => this.keys.clear());
 
-const LEFT = new Set(['ArrowLeft', 'KeyA']);
-const RIGHT = new Set(['ArrowRight', 'KeyD']);
-const CONFIRM = new Set(['Space', 'Enter']);
-const PAUSE = new Set(['KeyP', 'Escape']);
+    canvas.addEventListener('mousedown', (e) => {
+      this.dragging = true;
+      this.lastX = e.clientX;
+      this.lastY = e.clientY;
+      this.anyGesture = true;
+    });
+    window.addEventListener('mouseup', () => { this.dragging = false; });
+    window.addEventListener('mousemove', (e) => {
+      if (!this.dragging) return;
+      this.mouseDX += e.clientX - this.lastX;
+      this.mouseDY += e.clientY - this.lastY;
+      this.lastX = e.clientX;
+      this.lastY = e.clientY;
+    });
+    canvas.addEventListener('touchstart', (e) => {
+      const t = e.touches[0];
+      this.dragging = true;
+      this.lastX = t.clientX;
+      this.lastY = t.clientY;
+      this.anyGesture = true;
+    }, { passive: true });
+    canvas.addEventListener('touchmove', (e) => {
+      if (!this.dragging) return;
+      const t = e.touches[0];
+      this.mouseDX += t.clientX - this.lastX;
+      this.mouseDY += t.clientY - this.lastY;
+      this.lastX = t.clientX;
+      this.lastY = t.clientY;
+    }, { passive: true });
+    canvas.addEventListener('touchend', () => { this.dragging = false; });
+  }
 
-export function createInput(target) {
-  let left = false;
-  let right = false;
-  let actions = 0;
+  down(code) { return this.keys.has(code); }
+  /** True hanya pada frame saat tombol ditekan (sekali per tekanan). */
+  tapped(code) { return this.pressed.has(code); }
 
-  window.addEventListener('keydown', (event) => {
-    if (LEFT.has(event.code)) left = true;
-    else if (RIGHT.has(event.code)) right = true;
-    else if (CONFIRM.has(event.code)) {
-      if (!event.repeat) actions |= ACTION_CONFIRM;
-    } else if (PAUSE.has(event.code)) {
-      if (!event.repeat) actions |= ACTION_PAUSE;
-    } else return;
-    event.preventDefault();
-  });
-  window.addEventListener('keyup', (event) => {
-    if (LEFT.has(event.code)) left = false;
-    else if (RIGHT.has(event.code)) right = false;
-  });
-  // A key released while the tab is hidden never sends keyup: let go of everything on blur.
-  window.addEventListener('blur', () => {
-    left = false;
-    right = false;
-  });
-  target.addEventListener('pointerdown', () => {
-    actions |= ACTION_CONFIRM;
-  });
+  /** Gerak maju/mundur dari tombol (W/S atau panah), -1..1. */
+  moveAxis() {
+    let v = 0;
+    if (this.down('KeyW') || this.down('ArrowUp')) v += 1;
+    if (this.down('KeyS') || this.down('ArrowDown')) v -= 1;
+    return v;
+  }
 
-  return {
-    /** -1 for left, 1 for right, 0 for neither or both. */
-    direction() {
-      return (right ? 1 : 0) - (left ? 1 : 0);
-    },
-    /** The one-shot presses since the last call, as ACTION_* flags. */
-    takeActions() {
-      const taken = actions;
-      actions = 0;
-      return taken;
-    },
-  };
+  /** Gerak kiri/kanan (A/D atau panah), -1..1. */
+  strafeAxis() {
+    let v = 0;
+    if (this.down('KeyD') || this.down('ArrowRight')) v += 1;
+    if (this.down('KeyA') || this.down('ArrowLeft')) v -= 1;
+    return v;
+  }
+
+  /** Ambil & nol-kan delta mouse sejak frame terakhir. */
+  consumeMouse() {
+    const dx = this.mouseDX;
+    const dy = this.mouseDY;
+    this.mouseDX = 0;
+    this.mouseDY = 0;
+    return { dx, dy };
+  }
+
+  /** Dipanggil akhir tiap frame: tombol "baru ditekan" hanya berlaku satu frame. */
+  endFrame() { this.pressed.clear(); }
 }

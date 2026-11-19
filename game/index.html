@@ -1,19 +1,106 @@
 <!doctype html>
-<html lang="en">
+<html lang="id">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Block Dodger</title>
+<title>Kota Cakrawala — Open-World Crime 3D</title>
 <style>
-  html, body { margin: 0; height: 100%; overflow: hidden; background: #11141b; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0e1420; font-family: "Segoe UI", system-ui, sans-serif; }
   #game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
-  /* Read aloud, never shown: the status line screen readers announce. */
-  #status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+  /* ---------- HUD ---------- */
+  #hud { position: fixed; inset: 0; pointer-events: none; color: #fff; z-index: 5; }
+  .panel { background: rgba(10, 14, 22, 0.62); border: 1px solid rgba(255,255,255,0.16); border-radius: 10px; backdrop-filter: blur(3px); }
+  #hud-money { position: absolute; top: 14px; left: 14px; padding: 8px 14px; font-size: 22px; font-weight: 800; color: #7dff9a; letter-spacing: 0.5px; }
+  #hud-wanted { position: absolute; top: 14px; right: 14px; padding: 8px 14px; font-size: 22px; letter-spacing: 3px; color: #ffd75e; }
+  #hud-wanted.hot { color: #ff5340; text-shadow: 0 0 12px rgba(255,60,30,0.9); }
+  #hud-objective { position: absolute; top: 66px; left: 14px; padding: 8px 12px; font-size: 14px; max-width: 430px; line-height: 1.45; }
+  #hud-timer { position: absolute; top: 66px; left: 14px; margin-top: 44px; padding: 4px 10px; font-size: 18px; font-weight: 700; color: #ffe08a; }
+  #hud-timer.urgent { color: #ff5340; animation: blink 0.6s steps(2) infinite; }
+  @keyframes blink { 50% { opacity: 0.35; } }
+  #hud-speed { position: absolute; right: 16px; bottom: 16px; padding: 8px 14px; font-size: 24px; font-weight: 800; }
+  #hud-prompt { position: absolute; left: 50%; bottom: 96px; transform: translateX(-50%); padding: 10px 18px; font-size: 16px; font-weight: 700; background: rgba(255, 140, 26, 0.92); color: #1a1206; border-radius: 8px; display: none; }
+  #hud-toast { position: absolute; left: 50%; top: 110px; transform: translateX(-50%); padding: 10px 18px; font-size: 15px; font-weight: 600; background: rgba(10, 14, 22, 0.78); border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; opacity: 0; transition: opacity 0.4s; max-width: 560px; text-align: center; }
+  #minimap-wrap { position: absolute; left: 14px; bottom: 14px; padding: 6px; }
+  #minimap-wrap .map-title { font-size: 11px; letter-spacing: 2px; color: #cfe3ff; text-align: center; margin-bottom: 3px; font-weight: 700; }
+  #minimap { display: block; width: 190px; height: 190px; border-radius: 6px; }
+
+  /* ---------- Layar penuh (menu / pause / hasil) ---------- */
+  .screen { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 10; background: linear-gradient(160deg, rgba(8,12,24,0.82), rgba(20,8,32,0.72)); color: #fff; }
+  .screen.hidden { display: none; }
+  .card { max-width: 620px; margin: 16px; padding: 34px 40px; text-align: center; background: rgba(12, 18, 32, 0.88); border: 1px solid rgba(255, 180, 60, 0.45); border-radius: 16px; box-shadow: 0 18px 60px rgba(0,0,0,0.55); }
+  .card h1 { margin: 0 0 4px; font-size: 46px; letter-spacing: 2px; color: #ffb43c; text-shadow: 0 3px 0 rgba(0,0,0,0.4); }
+  .card h2 { margin: 0 0 10px; font-size: 30px; color: #ffb43c; }
+  .card .tagline { color: #9fd8ff; font-style: italic; margin: 0 0 16px; }
+  .card p { line-height: 1.55; font-size: 15px; color: #e8eef7; }
+  .card .controls { text-align: left; display: inline-block; font-size: 14px; line-height: 1.8; color: #d5dee9; background: rgba(255,255,255,0.06); padding: 10px 16px; border-radius: 10px; }
+  .card .controls b { color: #ffd75e; }
+  #menu-progress { margin: 14px 0 4px; font-weight: 700; color: #7dff9a; }
+  .btn { pointer-events: auto; cursor: pointer; display: inline-block; margin: 14px 6px 0; padding: 13px 30px; font-size: 17px; font-weight: 800; color: #1a1206; background: linear-gradient(180deg, #ffc21a, #ff8c1a); border: none; border-radius: 10px; box-shadow: 0 4px 0 #a34d00; }
+  .btn:active { transform: translateY(3px); box-shadow: 0 1px 0 #a34d00; }
+  .btn.ghost { background: rgba(255,255,255,0.14); color: #fff; box-shadow: 0 4px 0 rgba(0,0,0,0.4); }
+  #result-body { font-size: 16px; line-height: 1.7; }
 </style>
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.min.js" } }
+</script>
 </head>
 <body>
-<canvas id="game" aria-label="Block Dodger: move the paddle left and right to dodge falling blocks and catch coins"></canvas>
-<p id="status" role="status" aria-live="polite"></p>
+<canvas id="game" aria-label="Kota Cakrawala: game open-world 3D, jalan kaki dan mengemudi di kota pesisir"></canvas>
+
+<!-- HUD -->
+<div id="hud">
+  <div id="hud-money" class="panel">$0</div>
+  <div id="hud-wanted" class="panel">☆☆☆☆☆</div>
+  <div id="hud-objective" class="panel">Temui Bu Sari di bengkel.</div>
+  <div id="hud-timer" class="panel"></div>
+  <div id="minimap-wrap" class="panel">
+    <div class="map-title">KOTA CAKRAWALA</div>
+    <canvas id="minimap" width="190" height="190"></canvas>
+  </div>
+  <div id="hud-speed" class="panel"></div>
+  <div id="hud-prompt"></div>
+  <div id="hud-toast"></div>
+</div>
+
+<!-- Layar awal -->
+<div id="screen-menu" class="screen">
+  <div class="card">
+    <h1>KOTA CAKRAWALA</h1>
+    <p class="tagline">Kota pesisir yang cerah — dan utang yang gelap.</p>
+    <p>Raka, kurir muda yang terlilit utang, bekerja untuk <b>Bu Sari</b>, pemilik bengkel di sudut kota.
+    Antar paket, kabur dari polisi, menangkan balapan — dan lunasi utangmu sebelum kota ini menelanmu.</p>
+    <div class="controls">
+      <b>W A S D</b> — jalan kaki / mengemudi &nbsp;•&nbsp; <b>Mouse (drag)</b> — putar kamera<br>
+      <b>E</b> — masuk / keluar / curi mobil, bicara Bu Sari &nbsp;•&nbsp; <b>F</b> — pukul<br>
+      <b>Shift</b> — lari &nbsp;•&nbsp; <b>Spasi</b> — rem tangan &nbsp;•&nbsp; <b>Esc / P</b> — pause &nbsp;•&nbsp; <b>M</b> — bisu
+    </div>
+    <div id="menu-progress">Misi selesai: 0/3 • Uang: $0 • Bintang: 0/9</div>
+    <button id="btn-start" class="btn">▶ MULAI PETUALANGAN</button>
+    <button id="btn-mute" class="btn ghost">🔊 Suara: Hidup</button>
+    <p style="font-size:12px; color:#93a5bd;">Game 3D orisinal — kota, karakter, dan kendaraan fiktif. Bukan GTA, bukan Rockstar.</p>
+  </div>
+</div>
+
+<!-- Pause -->
+<div id="screen-pause" class="screen hidden">
+  <div class="card">
+    <h2>⏸ JEDA</h2>
+    <p>Kota Cakrawala menunggumu, Raka.</p>
+    <button id="btn-resume" class="btn">▶ Lanjutkan</button>
+    <button id="btn-restart" class="btn ghost">Kembali ke Menu</button>
+  </div>
+</div>
+
+<!-- Hasil misi -->
+<div id="screen-result" class="screen hidden">
+  <div class="card">
+    <h2 id="result-title">MISI SELESAI!</h2>
+    <p id="result-body"></p>
+    <button id="btn-result" class="btn">Lanjutkan</button>
+  </div>
+</div>
+
 <script type="module" src="./src/main.js"></script>
 </body>
 </html>
