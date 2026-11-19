@@ -1,154 +1,152 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="id">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Kota Cakrawala — Open-World Crime 3D</title>
+<title>Kota Cakrawala — Open World</title>
 <style>
-  html, body { margin: 0; height: 100%; overflow: hidden; background: #0e1420; font-family: "Segoe UI", system-ui, sans-serif; }
-  #game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
-
-  /* ---------- HUD ---------- */
-  #hud { position: fixed; inset: 0; pointer-events: none; color: #fff; z-index: 5; }
-  .panel { background: rgba(10, 14, 22, 0.62); border: 1px solid rgba(255,255,255,0.16); border-radius: 10px; backdrop-filter: blur(3px); }
-  #hud-money { position: absolute; top: 14px; left: 14px; padding: 8px 14px; font-size: 22px; font-weight: 800; color: #7dff9a; letter-spacing: 0.5px; }
-  #hud-wanted { position: absolute; top: 14px; right: 14px; padding: 8px 14px; font-size: 22px; letter-spacing: 3px; color: #ffd75e; }
-  #hud-wanted.hot { color: #ff5340; text-shadow: 0 0 12px rgba(255,60,30,0.9); }
-  #hud-objective { position: absolute; top: 66px; left: 14px; padding: 8px 12px; font-size: 14px; max-width: 430px; line-height: 1.45; }
-  #hud-timer { position: absolute; top: 66px; left: 14px; margin-top: 44px; padding: 4px 10px; font-size: 18px; font-weight: 700; color: #ffe08a; }
-  #hud-timer.urgent { color: #ff5340; animation: blink 0.6s steps(2) infinite; }
-  @keyframes blink { 50% { opacity: 0.35; } }
-  #hud-speed { position: absolute; right: 16px; bottom: 16px; padding: 8px 14px; font-size: 24px; font-weight: 800; }
-  #hud-vitals { position: absolute; top: 14px; left: 50%; transform: translateX(-50%); width: 280px; padding: 8px 12px; }
-  #hud-vitals .bar-row { display: flex; align-items: center; gap: 8px; margin: 3px 0; }
-  #hud-vitals .bar-label { font-size: 12px; font-weight: 800; width: 52px; color: #d5dee9; }
-  #hud-vitals .bar { flex: 1; height: 12px; background: rgba(255,255,255,0.15); border-radius: 6px; overflow: hidden; }
-  #hud-vitals .bar.hit { animation: hitflash 0.18s; }
-  @keyframes hitflash { 50% { background: rgba(255,60,40,0.7); } }
-  #hud-health-fill { height: 100%; width: 100%; background: linear-gradient(90deg, #2ecc71, #7dff9a); border-radius: 6px; transition: width 0.25s; }
-  #hud-health-fill.low { background: linear-gradient(90deg, #e74c3c, #ff6b5e); }
-  #hud-armour-fill { height: 100%; width: 0%; background: linear-gradient(90deg, #3498db, #7ec8ff); border-radius: 6px; transition: width 0.25s; }
-  #hud-health-text { font-size: 13px; font-weight: 800; color: #7dff9a; width: 44px; text-align: right; }
-  #hud-clock { position: absolute; top: 66px; right: 14px; padding: 6px 12px; font-size: 16px; font-weight: 800; color: #ffe08a; }
-  #hud-clock.night { color: #b78cff; }
-  #hud-radio { position: absolute; right: 16px; bottom: 66px; padding: 7px 12px; font-size: 13px; font-weight: 700; color: #ffb3d9; max-width: 320px; text-align: right; }
-  #hud-radio.off { color: #93a5bd; }
-  #hud-tracker { position: absolute; top: 118px; left: 14px; padding: 8px 10px; font-size: 12px; line-height: 1.7; max-width: 300px; }
-  #hud-tracker .tracker-head { font-weight: 800; color: #ffd75e; letter-spacing: 1px; margin-bottom: 2px; }
-  #hud-tracker .tracker-row { color: #c8d4e2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  #hud-tracker .tracker-row.done { color: #7dff9a; }
-  #hud-tracker .tracker-row.active { color: #fff; font-weight: 800; background: rgba(255,180,60,0.18); border-radius: 4px; }
-  #hud-tracker .tracker-row.current { color: #ffe08a; }
-  #hud-tracker .tracker-reward { float: right; color: #7dff9a; font-weight: 700; }
-  #hud-tracker .tracker-mark { display: inline-block; width: 14px; text-align: center; }
-  /* Panel garasi Bu Sari */
-  #garage-panel { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 12; width: 520px; max-width: 92vw; padding: 22px 26px; background: rgba(12, 18, 32, 0.96); border: 1px solid rgba(255, 180, 60, 0.55); border-radius: 14px; color: #fff; box-shadow: 0 18px 60px rgba(0,0,0,0.6); }
-  #garage-panel.hidden { display: none; }
-  #garage-panel h2 { margin: 0 0 4px; color: #ffb43c; font-size: 24px; }
-  #garage-panel .garage-money { font-weight: 800; color: #7dff9a; margin-bottom: 10px; }
-  #garage-panel .garage-item { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 4px; border-top: 1px solid rgba(255,255,255,0.12); font-size: 14px; }
-  #garage-panel .garage-item button { pointer-events: auto; cursor: pointer; padding: 6px 14px; font-weight: 800; border: none; border-radius: 8px; background: linear-gradient(180deg, #ffc21a, #ff8c1a); color: #1a1206; }
-  #garage-panel .garage-item button:disabled { background: rgba(255,255,255,0.2); color: #bbb; cursor: default; }
-  #garage-panel .garage-msg { min-height: 20px; margin-top: 8px; font-size: 13px; color: #ffe08a; }
-  #garage-panel .garage-close { margin-top: 8px; }
-  #hud-prompt { position: absolute; left: 50%; bottom: 96px; transform: translateX(-50%); padding: 10px 18px; font-size: 16px; font-weight: 700; background: rgba(255, 140, 26, 0.92); color: #1a1206; border-radius: 8px; display: none; }
-  #hud-toast { position: absolute; left: 50%; top: 110px; transform: translateX(-50%); padding: 10px 18px; font-size: 15px; font-weight: 600; background: rgba(10, 14, 22, 0.78); border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; opacity: 0; transition: opacity 0.4s; max-width: 560px; text-align: center; }
-  #minimap-wrap { position: absolute; left: 14px; bottom: 14px; padding: 6px; }
-  #minimap-wrap .map-title { font-size: 11px; letter-spacing: 2px; color: #cfe3ff; text-align: center; margin-bottom: 3px; font-weight: 700; }
-  #minimap { display: block; width: 190px; height: 190px; border-radius: 6px; }
-
-  /* ---------- Layar penuh (menu / pause / hasil) ---------- */
-  .screen { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 10; background: linear-gradient(160deg, rgba(8,12,24,0.82), rgba(20,8,32,0.72)); color: #fff; }
-  .screen.hidden { display: none; }
-  .card { max-width: 620px; margin: 16px; padding: 34px 40px; text-align: center; background: rgba(12, 18, 32, 0.88); border: 1px solid rgba(255, 180, 60, 0.45); border-radius: 16px; box-shadow: 0 18px 60px rgba(0,0,0,0.55); }
-  .card h1 { margin: 0 0 4px; font-size: 46px; letter-spacing: 2px; color: #ffb43c; text-shadow: 0 3px 0 rgba(0,0,0,0.4); }
-  .card h2 { margin: 0 0 10px; font-size: 30px; color: #ffb43c; }
-  .card .tagline { color: #9fd8ff; font-style: italic; margin: 0 0 16px; }
-  .card p { line-height: 1.55; font-size: 15px; color: #e8eef7; }
-  .card .controls { text-align: left; display: inline-block; font-size: 14px; line-height: 1.8; color: #d5dee9; background: rgba(255,255,255,0.06); padding: 10px 16px; border-radius: 10px; }
-  .card .controls b { color: #ffd75e; }
-  #menu-progress { margin: 14px 0 4px; font-weight: 700; color: #7dff9a; }
-  .btn { pointer-events: auto; cursor: pointer; display: inline-block; margin: 14px 6px 0; padding: 13px 30px; font-size: 17px; font-weight: 800; color: #1a1206; background: linear-gradient(180deg, #ffc21a, #ff8c1a); border: none; border-radius: 10px; box-shadow: 0 4px 0 #a34d00; }
-  .btn:active { transform: translateY(3px); box-shadow: 0 1px 0 #a34d00; }
-  .btn.ghost { background: rgba(255,255,255,0.14); color: #fff; box-shadow: 0 4px 0 rgba(0,0,0,0.4); }
-  #result-body { font-size: 16px; line-height: 1.7; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #0a1030;
+    font-family: 'Segoe UI', Arial, sans-serif; color: #fff; }
+  #game-root, #game-root canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+  #hud { position: fixed; inset: 0; pointer-events: none; display: none; z-index: 5; }
+  .panel { background: rgba(8, 14, 22, 0.72); border: 1px solid rgba(255,255,255,0.18);
+    border-radius: 10px; padding: 8px 12px; backdrop-filter: blur(2px); }
+  #hud-top-left { position: absolute; top: 12px; left: 12px; min-width: 230px; }
+  #hud-money { font-size: 26px; font-weight: 800; color: #7dff8a; text-shadow: 0 2px 4px #000; }
+  .bar-row { display: flex; align-items: center; gap: 6px; margin-top: 5px; font-size: 11px; font-weight: 700; }
+  .bar { flex: 1; height: 10px; background: rgba(255,255,255,0.18); border-radius: 5px; overflow: hidden; }
+  .bar > div { height: 100%; transition: width 0.2s; }
+  #hud-health-fill { background: linear-gradient(90deg, #37d67a, #7dff8a); width: 100%; }
+  #hud-armor-fill { background: linear-gradient(90deg, #3aa0ff, #7ac8ff); width: 0%; }
+  #hud-stars { font-size: 22px; letter-spacing: 2px; margin-top: 4px; color: #888; text-shadow: 0 0 6px #000; }
+  #hud-top-right { position: absolute; top: 12px; right: 12px; text-align: right; }
+  #hud-clock { font-size: 22px; font-weight: 800; }
+  #hud-radio { font-size: 13px; color: #ffd23e; margin-top: 2px; }
+  #hud-speed { font-size: 30px; font-weight: 800; margin-top: 4px; text-shadow: 0 2px 4px #000; }
+  #hud-compass { font-size: 12px; letter-spacing: 2px; color: #cfe8ff; margin-top: 2px; }
+  #hud-tracker { position: absolute; top: 150px; left: 12px; width: 250px; font-size: 12px; }
+  #hud-tracker h3 { font-size: 12px; color: #ffd23e; margin-bottom: 5px; letter-spacing: 1px; }
+  .tracker-row { padding: 2px 0; color: #dfe8f2; opacity: 0.85; }
+  .tracker-row.active { color: #ffd23e; font-weight: 800; opacity: 1; }
+  .tracker-row.done { color: #7dff8a; opacity: 0.8; text-decoration: line-through; }
+  #hud-minimap { position: absolute; right: 12px; bottom: 12px; width: 190px; height: 190px;
+    border: 2px solid rgba(255,255,255,0.35); border-radius: 10px; background: rgba(8,14,22,0.7); }
+  #hud-banner { position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+    max-width: 640px; text-align: center; font-size: 17px; font-weight: 800; color: #ffd23e;
+    text-shadow: 0 2px 6px #000; opacity: 0; transition: opacity 0.3s; padding: 8px 18px; }
+  #hud-prompt { position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%);
+    font-size: 14px; font-weight: 700; background: rgba(8,14,22,0.75); border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 8px; padding: 7px 16px; white-space: nowrap; }
+  #hud-controls { position: absolute; bottom: 14px; left: 12px; font-size: 11px; color: #cfe0f0;
+    line-height: 1.6; }
+  .overlay { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center;
+    justify-content: center; text-align: center; z-index: 10;
+    background: linear-gradient(180deg, rgba(10,16,48,0.82), rgba(255,120,40,0.35) 70%, rgba(10,16,48,0.9)); }
+  .overlay h1 { font-size: 64px; font-weight: 900; letter-spacing: 3px; color: #ffd23e;
+    text-shadow: 0 4px 0 #c22a2a, 0 8px 24px #000; }
+  .overlay h2 { font-size: 20px; color: #fff; margin-top: 6px; font-weight: 600; }
+  .overlay p { max-width: 560px; margin-top: 14px; font-size: 15px; line-height: 1.6; color: #e8eef5; }
+  .overlay button { pointer-events: auto; margin-top: 22px; font-size: 20px; font-weight: 800;
+    padding: 14px 44px; border: none; border-radius: 12px; cursor: pointer;
+    background: linear-gradient(180deg, #ffd23e, #f5a623); color: #221100;
+    box-shadow: 0 6px 0 #a86a00, 0 10px 24px rgba(0,0,0,0.5); }
+  .overlay button:hover { filter: brightness(1.08); }
+  .overlay button:active { transform: translateY(4px); box-shadow: 0 2px 0 #a86a00; }
+  .keys { margin-top: 18px; font-size: 13px; color: #cfe0f0; line-height: 1.9; }
+  #menu-progress { margin-top: 12px; font-size: 14px; color: #7dff8a; font-weight: 700; }
+  #pause-overlay { display: none; }
+  #weapon-wheel { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    width: 300px; height: 300px; display: none; z-index: 8; pointer-events: none; }
+  .wheel-seg { position: absolute; width: 120px; height: 120px; border-radius: 50%;
+    background: rgba(8,14,22,0.8); border: 2px solid rgba(255,255,255,0.3);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 800; pointer-events: auto; cursor: pointer; text-align: center; }
+  .wheel-seg small { font-weight: 400; color: #ffd23e; }
+  .wheel-seg.selected { border-color: #ffd23e; background: rgba(255,210,62,0.25); }
+  .wheel-seg[data-idx="0"] { left: 90px; top: -10px; }
+  .wheel-seg[data-idx="1"] { left: -10px; top: 150px; }
+  .wheel-seg[data-idx="2"] { left: 190px; top: 150px; }
+  #wheel-center { position: absolute; left: 110px; top: 110px; width: 80px; height: 80px;
+    border-radius: 50%; background: rgba(8,14,22,0.85); border: 2px solid #ffd23e;
+    display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 800;
+    color: #ffd23e; text-align: center; }
+  #garage-panel { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    width: 460px; max-width: 92vw; background: rgba(10,16,28,0.95); border: 2px solid #ffd23e;
+    border-radius: 14px; padding: 20px; z-index: 9; display: none; }
+  #garage-panel h2 { color: #ffd23e; margin-bottom: 4px; }
+  #garage-money { color: #7dff8a; font-weight: 800; margin-bottom: 12px; }
+  .garage-row { display: flex; justify-content: space-between; align-items: center; gap: 10px;
+    padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.12); font-size: 14px; }
+  .garage-row button { background: #ffd23e; border: none; border-radius: 8px; padding: 7px 16px;
+    font-weight: 800; cursor: pointer; }
+  .garage-row button:disabled { background: #555; color: #bbb; cursor: default; }
+  #garage-paints { display: flex; gap: 8px; margin-top: 12px; }
+  .paint-swatch { width: 34px; height: 34px; border-radius: 50%; border: 3px solid transparent; cursor: pointer; }
+  .paint-swatch.selected { border-color: #fff; }
+  #btn-close-garage { margin-top: 16px; background: #ffd23e; border: none; border-radius: 8px;
+    padding: 10px 22px; font-weight: 800; cursor: pointer; }
 </style>
 <script type="importmap">
 { "imports": { "three": "./vendor/three.module.min.js" } }
 </script>
 </head>
 <body>
-<canvas id="game" aria-label="Kota Cakrawala: game open-world 3D, jalan kaki dan mengemudi di kota pesisir"></canvas>
+<div id="game-root"></div>
 
-<!-- HUD -->
 <div id="hud">
-  <div id="hud-money" class="panel">$0</div>
-  <div id="hud-wanted" class="panel">☆☆☆☆☆</div>
-  <div id="hud-vitals" class="panel">
-    <div class="bar-row"><span class="bar-label">NYAWA</span><div class="bar"><div id="hud-health-fill"></div></div><span id="hud-health-text">♥ 100</span></div>
-    <div class="bar-row" id="hud-armour-row" style="display:none"><span class="bar-label">BAJA</span><div class="bar"><div id="hud-armour-fill"></div></div></div>
+  <div id="hud-top-left" class="panel">
+    <div id="hud-money">$250</div>
+    <div class="bar-row"><span>NYAWA</span><div class="bar"><div id="hud-health-fill"></div></div></div>
+    <div class="bar-row"><span>ARMOR</span><div class="bar"><div id="hud-armor-fill"></div></div></div>
+    <div id="hud-stars">☆☆☆☆☆</div>
   </div>
-  <div id="hud-clock" class="panel">🕐 08:00</div>
-  <div id="hud-objective" class="panel">Temui Bu Sari di bengkel.</div>
-  <div id="hud-timer" class="panel"></div>
-  <div id="hud-tracker" class="panel"></div>
-  <div id="minimap-wrap" class="panel">
-    <div class="map-title">KOTA CAKRAWALA</div>
-    <canvas id="minimap" width="190" height="190"></canvas>
+  <div id="hud-top-right" class="panel">
+    <div id="hud-clock">10:00</div>
+    <div id="hud-radio">♪ Cakrawala FM</div>
+    <div id="hud-speed">0 km/h</div>
+    <div id="hud-compass">◀ N 0° ▶</div>
   </div>
-  <div id="hud-radio" class="panel off">♪ Radio mati — tekan R</div>
-  <div id="hud-speed" class="panel"></div>
-  <div id="hud-prompt"></div>
-  <div id="hud-toast"></div>
+  <div id="hud-tracker" class="panel"><h3>★ MISI BU SARI ★</h3><div id="hud-tracker-list"></div></div>
+  <div id="hud-banner" class="panel"></div>
+  <canvas id="hud-minimap" width="190" height="190"></canvas>
+  <div id="hud-controls">WASD gerak • E interaksi • F serang<br>Q roda senjata • R radio • G garasi • Esc jeda</div>
+  <div id="hud-prompt">WASD — Jalan</div>
 </div>
 
-<!-- Panel garasi Bu Sari -->
-<div id="garage-panel" class="hidden">
-  <h2>🔧 GARASI BU SARI</h2>
-  <div class="garage-money" id="garage-money">Uang: $0</div>
-  <div id="garage-items"></div>
-  <div class="garage-msg" id="garage-msg">Pilih upgrade — uang dari hadiah misi.</div>
-  <button id="btn-garage-close" class="btn garage-close">Tutup (G)</button>
+<div id="weapon-wheel">
+  <div class="wheel-seg" data-idx="0">👊<br>Tinju<br><small>[1] ∞</small></div>
+  <div class="wheel-seg" data-idx="1">🔫<br>Pistol<br><small>[2] ammo</small></div>
+  <div class="wheel-seg" data-idx="2">🔫<br>SMG<br><small>[3] ammo</small></div>
+  <div id="wheel-center">SENJATA</div>
 </div>
 
-<!-- Layar awal -->
-<div id="screen-menu" class="screen">
-  <div class="card">
-    <h1>KOTA CAKRAWALA</h1>
-    <p class="tagline">Kota pesisir yang cerah — dan utang yang gelap.</p>
-    <p>Raka, kurir muda yang terlilit utang, bekerja untuk <b>Bu Sari</b>, pemilik bengkel di sudut kota.
-    Antar paket, kabur dari polisi, menangkan balapan — dan lunasi utangmu sebelum kota ini menelanmu.</p>
-    <div class="controls">
-      <b>W A S D</b> — jalan kaki / mengemudi &nbsp;•&nbsp; <b>Mouse (drag)</b> — putar kamera<br>
-      <b>E</b> — masuk / keluar / curi mobil, bicara Bu Sari &nbsp;•&nbsp; <b>F</b> — pukul<br>
-      <b>Shift</b> — lari / nitro (kalau dibeli) &nbsp;•&nbsp; <b>Spasi</b> — rem tangan &nbsp;•&nbsp; <b>H</b> — klakson<br>
-      <b>R</b> — radio (ganti stasiun) &nbsp;•&nbsp; <b>G</b> — garasi Bu Sari (di depan bengkel)<br>
-      <b>Esc / P</b> — pause &nbsp;•&nbsp; <b>M</b> — bisu
-    </div>
-    <div id="menu-progress">Misi selesai: 0/8 • Uang: $0 • Bintang: 0/24</div>
-    <button id="btn-start" class="btn">▶ MULAI PETUALANGAN</button>
-    <button id="btn-mute" class="btn ghost">🔊 Suara: Hidup</button>
-    <p style="font-size:12px; color:#93a5bd;">Game 3D orisinal — kota, karakter, dan kendaraan fiktif. Bukan GTA, bukan Rockstar.</p>
-  </div>
+<div id="garage-panel">
+  <h2>🔧 Garasi Bu Sari</h2>
+  <div id="garage-money">$250</div>
+  <div id="garage-list"></div>
+  <h3 style="margin-top:14px;color:#ffd23e;">Cat Mobil</h3>
+  <div id="garage-paints"></div>
+  <button id="btn-close-garage">TUTUP [G]</button>
 </div>
 
-<!-- Pause -->
-<div id="screen-pause" class="screen hidden">
-  <div class="card">
-    <h2>⏸ JEDA</h2>
-    <p>Kota Cakrawala menunggumu, Raka.</p>
-    <button id="btn-resume" class="btn">▶ Lanjutkan</button>
-    <button id="btn-restart" class="btn ghost">Kembali ke Menu</button>
-  </div>
+<div id="menu-overlay" class="overlay">
+  <h1>KOTA CAKRAWALA</h1>
+  <h2>Open-world crime • Raka &amp; Bu Sari</h2>
+  <p>Kota pantai yang hidup: 100 gedung, lalu lintas, pejalan kaki, polisi,
+     helikopter, dan 8 misi Bu Sari senilai $3.950. Curi mobil, kabur dari
+     kejaran polisi, dan jadi legenda Cakrawala.</p>
+  <button id="btn-start">▶ MULAI MAIN</button>
+  <div id="menu-progress"></div>
+  <div class="keys">WASD jalan / mengemudi • E masuk mobil &amp; bicara • Spasi rem tangan<br>
+    F pukul / tembak • Q (tahan) roda senjata • R ganti radio • G garasi • Esc jeda</div>
 </div>
 
-<!-- Hasil misi -->
-<div id="screen-result" class="screen hidden">
-  <div class="card">
-    <h2 id="result-title">MISI SELESAI!</h2>
-    <p id="result-body"></p>
-    <button id="btn-result" class="btn">Lanjutkan</button>
-  </div>
+<div id="pause-overlay" class="overlay">
+  <h1 style="font-size:44px;">JEDA</h1>
+  <p>Game dijeda. Progres tersimpan otomatis.</p>
+  <button id="btn-resume">▶ LANJUTKAN</button>
+  <button id="btn-restart" style="background:linear-gradient(180deg,#8fa8c8,#5a7ba8);color:#fff;">↺ MULAI ULANG</button>
 </div>
 
 <script type="module" src="./src/main.js"></script>

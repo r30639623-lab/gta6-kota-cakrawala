@@ -1,21 +1,16 @@
-// A working gta6-01 entry (Node 22, standard library only): the game is this directory's
-// game/ folder, plain static files a desktop browser loads offline (game/index.html and its ES
-// modules, no library and no network request), and the program hands it in. It copies game/ and
-// screenshots/ from beside this file to /output and writes /output/dossier.json, the summary the
-// judge reads, with the vendored make.fun library.
-//
-// The game handed in here is "Kota Cakrawala" (round 2 — 8 misi, helikopter polisi, radio & garasi),
-// a 3D open-world crime game built for this entry
-// (three.js vendored under game/vendor/): Raka the courier walks and drives through a sun-soaked
-// procedural coastal city, steals cars, dodges traffic and pedestrians, earns wanted stars and
-// police chases (including a helicopter at 4–5 stars and roadblocks), and runs 8 story missions
-// for Bu Sari the garage owner — with a rich HUD, minimap, procedural WebAudio sound and radio,
-// a garage with car upgrades, a save in localStorage, and staged ?shot= screenshots (cover at
-// dusk with a 4-star police chase + helicopter, night neon driving, the market delivery, and the start screen).
-// The starter Block Dodger 2D game is gone; every game file under game/src/ was written for
-// this entry, split by system (city, vehicles, traffic, police, missions, player, hud, audio,
-// input, save, shots) so the judge's source outline reads like the game plays.
-//
+// Kota Cakrawala — a gta6-01 entry (Node 22, standard library only): the game
+// is this directory's game/ folder, plain static files a desktop browser loads
+// offline (game/index.html and its ES modules, three.js vendored under
+// game/vendor/, no network request), and the program hands it in. It copies
+// game/ and screenshots/ from beside this file to /output and writes
+// /output/dossier.json, the summary the judge reads, with the vendored
+// make.fun library. The game itself is a complete open-world crime game:
+// a procedural coastal city to explore on foot and by car, traffic and
+// pedestrians, stealable cars, a wanted system with police chases, roadblocks
+// and a helicopter, 8 story missions from Bu Sari, combat with a weapon
+// wheel, a rich HUD with a labelled minimap, procedural radio and sound,
+// a garage with upgrades, and a localStorage save. Round 3 rebuild: every
+// source line was written fresh in the recorded session.
 // Serve it locally with `node serve.ts`, then open http://localhost:8080.
 // Outside the grader's container, MAKEFUN_OUTPUT_DIR stands in for /output:
 //   mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts

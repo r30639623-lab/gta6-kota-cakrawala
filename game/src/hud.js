@@ -1,251 +1,162 @@
-// hud.js — HUD Kota Cakrawala: uang, wanted (bintang), kecepatan, objektif
-// misi + timer, prompt interaksi, dan minimap 2D (canvas): jalan, gedung,
-// pantai, pemain, polisi, lalu lintas, dan penanda misi.
-import { CITY } from './city.js';
+// hud.js — every HUD element: money, health + armor bars, wanted stars,
+// speed, game clock, radio station, 8-mission tracker, minimap with
+// labels, compass, mission banner and the contextual prompt.
+import { MISSIONS } from './missions.js';
 
-export class Hud {
-  constructor() {
-    this.moneyEl = document.getElementById('hud-money');
-    this.wantedEl = document.getElementById('hud-wanted');
-    this.speedEl = document.getElementById('hud-speed');
-    this.objectiveEl = document.getElementById('hud-objective');
-    this.timerEl = document.getElementById('hud-timer');
-    this.promptEl = document.getElementById('hud-prompt');
-    this.toastEl = document.getElementById('hud-toast');
-    this.minimap = document.getElementById('minimap');
-    this.mapCtx = this.minimap.getContext('2d');
-    this.toastTimer = 0;
-    this.lastMoney = -1;
-    this.lastWanted = -1;
-    // Panel baru round 2: nyawa, lapis baja, jam, radio, tracker misi.
-    this.healthFill = document.getElementById('hud-health-fill');
-    this.armourFill = document.getElementById('hud-armour-fill');
-    this.armourRow = document.getElementById('hud-armour-row');
-    this.healthText = document.getElementById('hud-health-text');
-    this.clockEl = document.getElementById('hud-clock');
-    this.radioEl = document.getElementById('hud-radio');
-    this.trackerEl = document.getElementById('hud-tracker');
-    this.lastHealth = -1;
-    this.lastArmour = -1;
-    this.lastClock = '';
-    this.lastRadio = '';
-    this.lastTracker = '';
-  }
+export function createHud(doc, save) {
+  const $ = (id) => doc.getElementById(id);
+  const els = {
+    money: $('hud-money'),
+    health: $('hud-health-fill'),
+    armor: $('hud-armor-fill'),
+    stars: $('hud-stars'),
+    speed: $('hud-speed'),
+    clock: $('hud-clock'),
+    radio: $('hud-radio'),
+    tracker: $('hud-tracker-list'),
+    banner: $('hud-banner'),
+    prompt: $('hud-prompt'),
+    minimap: $('hud-minimap'),
+    compass: $('hud-compass'),
+    wheel: $('weapon-wheel'),
+    garage: $('garage-panel'),
+    garageMoney: $('garage-money'),
+  };
+  const mapCtx = els.minimap ? els.minimap.getContext('2d') : null;
+  let bannerTimer = 0;
 
-  /** Bar nyawa (hijau) & lapis baja (biru) Raka. */
-  setHealth(health, armour) {
-    const h = Math.max(0, Math.round(health));
-    const a = Math.max(0, Math.round(armour));
-    if (h !== this.lastHealth) {
-      this.lastHealth = h;
-      this.healthFill.style.width = `${h}%`;
-      this.healthFill.classList.toggle('low', h <= 30);
-      this.healthText.textContent = `♥ ${h}`;
-    }
-    if (a !== this.lastArmour) {
-      this.lastArmour = a;
-      this.armourFill.style.width = `${a}%`;
-      if (this.armourRow) this.armourRow.style.display = a > 0 ? 'flex' : 'none';
+  function renderTracker(activeId) {
+    if (!els.tracker) return;
+    els.tracker.innerHTML = '';
+    for (const m of MISSIONS) {
+      const done = save.missionsDone.includes(m.id);
+      const row = doc.createElement('div');
+      row.className = 'tracker-row' + (done ? ' done' : '') + (m.id === activeId ? ' active' : '');
+      row.textContent = `${done ? '✓' : (m.id === activeId ? '►' : '○')} ${m.name} — $${m.reward}`;
+      els.tracker.appendChild(row);
     }
   }
 
-  /** Jam dalam game (format 24 jam, mis. 14:35). */
-  setClock(hours) {
-    const h = Math.floor(hours) % 24;
-    const m = Math.floor((hours % 1) * 60);
-    const label = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-    if (label !== this.lastClock) {
-      this.lastClock = label;
-      this.clockEl.textContent = `🕐 ${label}`;
-      this.clockEl.classList.toggle('night', h >= 18 || h < 6);
+  function drawMinimap(playerPos, heading, cars, policeCars, heli, missionTarget, landmarks) {
+    if (!mapCtx) return;
+    const W = 190;
+    const H = 190;
+    mapCtx.clearRect(0, 0, W, H);
+    mapCtx.fillStyle = 'rgba(12, 20, 14, 0.82)';
+    mapCtx.fillRect(0, 0, W, H);
+    const toMap = (x, z) => [((x + 320) / 640) * W, ((z + 320) / 640) * H];
+    // Sea + beach.
+    mapCtx.fillStyle = '#1e6f9e';
+    mapCtx.fillRect(0, ((320 + 320) / 640) * H, W, H - ((320 + 320) / 640) * H);
+    mapCtx.fillStyle = '#d9c28f';
+    mapCtx.fillRect(0, ((300 + 320) / 640) * H, W, 6);
+    // Roads.
+    mapCtx.strokeStyle = '#5a6270';
+    mapCtx.lineWidth = 2;
+    for (const c of [-270, -210, -150, -90, -30, 30, 90, 150, 210, 270]) {
+      const [ax] = toMap(c, 0);
+      const [, az] = toMap(0, c);
+      mapCtx.beginPath(); mapCtx.moveTo(ax, 0); mapCtx.lineTo(ax, H); mapCtx.stroke();
+      mapCtx.beginPath(); mapCtx.moveTo(0, az); mapCtx.lineTo(W, az); mapCtx.stroke();
     }
+    // Landmark labels.
+    mapCtx.font = 'bold 9px sans-serif';
+    mapCtx.fillStyle = '#ffd23e';
+    for (const [key, label] of [['menara', 'Menara'], ['pasar', 'Pasar'], ['rs', 'RS'], ['pantai', 'Pantai'], ['dermaga', 'Dermaga']]) {
+      const p = landmarks[key];
+      if (!p) continue;
+      const [mx, my] = toMap(p.x, p.z);
+      mapCtx.fillText(label, mx + 4, my - 4);
+      mapCtx.fillStyle = '#ff5a5a';
+      mapCtx.fillRect(mx - 2, my - 2, 4, 4);
+      mapCtx.fillStyle = '#ffd23e';
+    }
+    // Mission beacon.
+    if (missionTarget) {
+      const [mx, my] = toMap(missionTarget.x, missionTarget.z);
+      mapCtx.fillStyle = '#ffd23e';
+      mapCtx.beginPath();
+      mapCtx.arc(mx, my, 6 + Math.sin(performance.now() * 0.005) * 2, 0, Math.PI * 2);
+      mapCtx.fill();
+    }
+    // Police + heli.
+    mapCtx.fillStyle = '#3aa0ff';
+    for (const c of policeCars) {
+      const [mx, my] = toMap(c.pos.x, c.pos.z);
+      mapCtx.fillRect(mx - 2, my - 2, 4, 4);
+    }
+    if (heli && heli.visible) {
+      const [mx, my] = toMap(heli.position.x, heli.position.z);
+      mapCtx.fillStyle = '#ff2222';
+      mapCtx.beginPath();
+      mapCtx.arc(mx, my, 5, 0, Math.PI * 2);
+      mapCtx.fill();
+    }
+    // Traffic dots.
+    mapCtx.fillStyle = '#e8e8e8';
+    for (const c of cars) {
+      const [mx, my] = toMap(c.pos.x, c.pos.z);
+      mapCtx.fillRect(mx - 1, my - 1, 2, 2);
+    }
+    // Player arrow.
+    const [px, py] = toMap(playerPos.x, playerPos.z);
+    mapCtx.save();
+    mapCtx.translate(px, py);
+    mapCtx.rotate(Math.atan2(Math.sin(heading), Math.cos(heading)) + Math.PI / 2);
+    mapCtx.fillStyle = '#22ff66';
+    mapCtx.beginPath();
+    mapCtx.moveTo(0, -7);
+    mapCtx.lineTo(5, 6);
+    mapCtx.lineTo(-5, 6);
+    mapCtx.closePath();
+    mapCtx.fill();
+    mapCtx.restore();
   }
 
-  /** Tampilan radio: nama stasiun + lagu, atau "Radio mati (R)". */
-  setRadio(label, on) {
-    const text = on ? `♪ ${label}` : '♪ Radio mati — tekan R';
-    if (text !== this.lastRadio) {
-      this.lastRadio = text;
-      this.radioEl.textContent = text;
-      this.radioEl.classList.toggle('off', !on);
-    }
-  }
-
-  /** Tracker misi: daftar 8 misi dengan status ✓ / ▶ / ○. */
-  setTracker(list) {
-    if (!list || !this.trackerEl) return;
-    const html = list.map((m) => {
-      const mark = m.done ? '✓' : m.active ? '▶' : m.current ? '○' : '·';
-      const cls = m.done ? 'done' : m.active ? 'active' : m.current ? 'current' : '';
-      return `<div class="tracker-row ${cls}"><span class="tracker-mark">${mark}</span> ${m.typeLabel} ${m.title.replace(/^Misi \d+ — /, '')} <span class="tracker-reward">$${m.reward}</span></div>`;
-    }).join('');
-    if (html !== this.lastTracker) {
-      this.lastTracker = html;
-      this.trackerEl.innerHTML = `<div class="tracker-head">📋 MISI BU SARI (${list.filter((m) => m.done).length}/8)</div>${html}`;
-    }
-  }
-
-  /** Kilat merah saat Raka kena damage (umpan balik combat). */
-  flashDamage() {
-    this.healthFill.parentElement.classList.add('hit');
-    setTimeout(() => this.healthFill.parentElement.classList.remove('hit'), 180);
-  }
-
-  setMoney(money) {
-    if (money !== this.lastMoney) {
-      this.moneyEl.textContent = `$${money}`;
-      this.lastMoney = money;
-    }
-  }
-
-  setWanted(level) {
-    if (level === this.lastWanted) return;
-    this.lastWanted = level;
-    let stars = '';
-    for (let i = 0; i < 5; i++) stars += i < level ? '★' : '☆';
-    this.wantedEl.textContent = stars;
-    this.wantedEl.classList.toggle('hot', level > 0);
-  }
-
-  setSpeed(kmh, inCar) {
-    this.speedEl.style.display = inCar ? 'block' : 'none';
-    if (inCar) this.speedEl.textContent = `${Math.round(kmh)} km/h`;
-  }
-
-  setObjective(text, timeLeft) {
-    this.objectiveEl.textContent = text;
-    if (timeLeft != null) {
-      const t = Math.max(0, Math.ceil(timeLeft));
-      this.timerEl.textContent = `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
-      this.timerEl.classList.toggle('urgent', t <= 15);
-    } else {
-      this.timerEl.textContent = '';
-    }
-  }
-
-  setPrompt(text) {
-    this.promptEl.textContent = text || '';
-    this.promptEl.style.display = text ? 'block' : 'none';
-  }
-
-  toast(text, seconds = 3) {
-    this.toastEl.textContent = text;
-    this.toastEl.style.opacity = '1';
-    this.toastTimer = seconds;
-  }
-
-  update(dt) {
-    if (this.toastTimer > 0) {
-      this.toastTimer -= dt;
-      if (this.toastTimer <= 0) this.toastEl.style.opacity = '0';
-    }
-  }
-
-  /** Gambar minimap: kota dari atas, pemain panah putih, polisi merah. */
-  drawMinimap(state) {
-    const ctx = this.mapCtx;
-    const S = this.minimap.width;
-    const world = 860; // -430..430
-    const toMap = (v) => ((v + world / 2) / world) * S;
-    ctx.clearRect(0, 0, S, S);
-    // Latar: laut di timur & selatan, darat abu-abu.
-    ctx.fillStyle = '#2f6f9f';
-    ctx.fillRect(0, 0, S, S);
-    ctx.fillStyle = '#5d6b63';
-    ctx.fillRect(0, 0, toMap(330), toMap(330));
-    // Jalan.
-    ctx.strokeStyle = '#3d3f45';
-    ctx.lineWidth = 4;
-    for (let v = -300; v <= 300; v += 60) {
-      ctx.beginPath(); ctx.moveTo(toMap(v), toMap(-300)); ctx.lineTo(toMap(v), toMap(300)); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(toMap(-300), toMap(v)); ctx.lineTo(toMap(300), toMap(v)); ctx.stroke();
-    }
-    // Bengkel Bu Sari (oranye) & pelabuhan (kuning).
-    ctx.fillStyle = '#ff8c1a';
-    ctx.fillRect(toMap(-278), toMap(262), 16, 14);
-    ctx.fillStyle = '#e8c33a';
-    ctx.fillRect(toMap(50), toMap(340), 24, 8);
-    // Landmark round 2: Menara (cyan), Pasar (hijau), RS (putih + palang).
-    ctx.fillStyle = '#00e5ff';
-    ctx.fillRect(toMap(210) - 4, toMap(-210) - 4, 8, 8);
-    ctx.fillStyle = '#27ae60';
-    ctx.fillRect(toMap(-150) - 5, toMap(150) - 5, 10, 10);
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(toMap(210) - 4, toMap(210) - 4, 8, 8);
-    ctx.fillStyle = '#ff2a2a';
-    ctx.fillRect(toMap(210) - 1, toMap(210) - 3, 2, 6);
-    ctx.fillRect(toMap(210) - 3, toMap(210) - 1, 6, 2);
-    // Label distrik di minimap (kecil, abu terang).
-    ctx.fillStyle = 'rgba(230,238,248,0.75)';
-    ctx.font = '9px sans-serif';
-    ctx.fillText('MENARA', toMap(210) - 16, toMap(-210) - 8);
-    ctx.fillText('PASAR', toMap(-150) - 12, toMap(150) + 16);
-    ctx.fillText('RS', toMap(210) + 7, toMap(210) + 3);
-    ctx.fillText('PANTAI', toMap(360) - 14, toMap(0) - 6);
-    // Kompas: utara di atas.
-    ctx.fillStyle = '#ffd75e';
-    ctx.font = 'bold 11px sans-serif';
-    ctx.fillText('N ↑', S - 22, 14);
-    // Lalu lintas (titik abu-abu).
-    ctx.fillStyle = '#cfd6dd';
-    for (const c of state.trafficCars) {
-      ctx.fillRect(toMap(c.pos.x) - 1.5, toMap(c.pos.z) - 1.5, 3, 3);
-    }
-    // Penanda misi (kuning berdenyut).
-    if (state.missionTarget) {
-      const pulse = 5 + Math.sin(state.elapsed * 5) * 2;
-      ctx.fillStyle = '#ffc21a';
-      ctx.beginPath();
-      ctx.arc(toMap(state.missionTarget.x), toMap(state.missionTarget.z), pulse, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = '#7a5b00';
-      ctx.lineWidth = 2;
-      ctx.stroke();
-    }
-    // Polisi (merah).
-    ctx.fillStyle = '#ff2a2a';
-    for (const p of state.police) {
-      ctx.beginPath();
-      ctx.arc(toMap(p.pos.x), toMap(p.pos.z), 3.5, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    // Helikopter polisi (biru, huruf H) — wanted 4–5.
-    if (state.heli) {
-      ctx.fillStyle = '#3a86ff';
-      ctx.beginPath();
-      ctx.arc(toMap(state.heli.pos.x), toMap(state.heli.pos.z), 6, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 8px sans-serif';
-      ctx.fillText('H', toMap(state.heli.pos.x) - 3, toMap(state.heli.pos.z) + 3);
-    }
-    // Roadblock polisi (kotak merah bergaris).
-    if (state.roadblocks) {
-      ctx.strokeStyle = '#ff2a2a';
-      ctx.lineWidth = 2;
-      for (const rb of state.roadblocks) {
-        ctx.strokeRect(toMap(rb.pos.x) - 6, toMap(rb.pos.z) - 6, 12, 12);
-        ctx.fillStyle = '#ff2a2a';
-        ctx.fillRect(toMap(rb.pos.x) - 2, toMap(rb.pos.z) - 2, 4, 4);
+  return {
+    renderTracker,
+    setPrompt(text) {
+      if (els.prompt && els.prompt.textContent !== text) els.prompt.textContent = text;
+    },
+    showBanner(text, seconds = 4) {
+      if (!els.banner) return;
+      els.banner.textContent = text;
+      els.banner.style.opacity = '1';
+      bannerTimer = seconds;
+    },
+    update(dt, snap) {
+      if (bannerTimer > 0) {
+        bannerTimer -= dt;
+        if (bannerTimer <= 0 && els.banner) els.banner.style.opacity = '0';
       }
-    }
-    // Pemain: panah putih searah hadap (peta: x = timur, y = selatan).
-    const px = toMap(state.playerPos.x);
-    const pz = toMap(state.playerPos.z);
-    ctx.save();
-    ctx.translate(px, pz);
-    ctx.rotate(Math.PI - state.playerHeading);
-    ctx.fillStyle = '#ffffff';
-    ctx.strokeStyle = '#111111';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.moveTo(0, -7);
-    ctx.lineTo(5, 6);
-    ctx.lineTo(0, 3);
-    ctx.lineTo(-5, 6);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-    ctx.restore();
-  }
+      if (els.money) els.money.textContent = `$${snap.money}`;
+      if (els.health) els.health.style.width = `${Math.max(0, snap.health)}%`;
+      if (els.armor) els.armor.style.width = `${Math.max(0, snap.armor)}%`;
+      if (els.stars) {
+        els.stars.textContent = '★'.repeat(snap.wanted) + '☆'.repeat(Math.max(0, 5 - snap.wanted));
+        els.stars.style.color = snap.wanted > 0 ? '#ff4444' : '#888888';
+      }
+      if (els.speed) els.speed.textContent = `${Math.round(Math.abs(snap.speedKmh))} km/h`;
+      if (els.clock) els.clock.textContent = snap.clockText;
+      if (els.radio) els.radio.textContent = `♪ ${snap.radioStation}`;
+      if (els.compass) {
+        const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+        const deg = ((snap.headingDeg % 360) + 360) % 360;
+        els.compass.textContent = `◀ ${dirs[Math.round(deg / 45) % 8]} ${Math.round(deg)}° ▶`;
+      }
+      drawMinimap(snap.playerPos, snap.heading, snap.trafficCars, snap.policeCars, snap.heli, snap.missionTarget, snap.landmarks);
+    },
+    showWheel(show) { if (els.wheel) els.wheel.style.display = show ? 'flex' : 'none'; },
+    markWheel(selected) {
+      if (!els.wheel) return;
+      for (const seg of els.wheel.querySelectorAll('.wheel-seg')) {
+        seg.classList.toggle('selected', Number(seg.dataset.idx) === selected);
+      }
+    },
+    showGarage(show, money) {
+      if (els.garage) els.garage.style.display = show ? 'block' : 'none';
+      if (show && els.garageMoney) els.garageMoney.textContent = `$${money}`;
+    },
+    setGarageMoney(money) { if (els.garageMoney) els.garageMoney.textContent = `$${money}`; },
+  };
 }
