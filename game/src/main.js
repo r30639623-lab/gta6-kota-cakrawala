@@ -1,508 +1,537 @@
-// main.js — bootstrap + game loop for Kota Cakrawala.
-// Wires city, player, vehicles, traffic, police, missions, HUD, radio,
-// garage, weapons, audio, input and save into one playable open world.
+// main.js — Bootstrap Kota Cakrawala: loop game, mode, kamera,
+// interaksi (E/G/F/Q/R/H), wanted, misi, relik, save, antarmuka debug.
 import * as THREE from 'three';
-import { createInput } from './input.js';
-import { createAudio } from './audio.js';
-import { loadSave, writeSave } from './save.js';
 import { buildCity } from './city.js';
-import { createPlayerCar } from './vehicles.js';
+import { createPlayer } from './player.js';
+import { createPlayerCar, carById, CARS } from './vehicles.js';
 import { createTraffic } from './traffic.js';
 import { createPolice } from './police.js';
-import { createMissions } from './missions.js';
+import { createMissions, ACT_NAMES } from './missions.js';
+import { createCollectibles, RELICS } from './collectibles.js';
+import { createDistricts, districtName } from './districts.js';
 import { createHud } from './hud.js';
 import { createRadio } from './radio.js';
 import { createGarage } from './garage.js';
-import { createWeapons, WEAPONS } from './weapons.js';
-import { createPlayer } from './player.js';
-import { applyShot } from './shots.js';
+import { createWeapons } from './weapons.js';
+import { createAudio } from './audio.js';
+import { createInput } from './input.js';
+import { loadSave, storeSave, clearSave } from './save.js';
+import { setupShots } from './shots.js';
 
 const save = loadSave();
-const input = createInput();
 const audio = createAudio();
+const input = createInput();
+const hud = createHud();
+const districts = createDistricts(save);
+const radio = createRadio(audio);
 
+// --- Renderer / scene / kamera ---
+const root = document.getElementById('game-root');
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-renderer.shadowMap.enabled = false;
-document.getElementById('game-root').appendChild(renderer.domElement);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+root.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x87b5e0);
-scene.fog = new THREE.Fog(0x87b5e0, 160, 700);
-const camera = new THREE.PerspectiveCamera(68, window.innerWidth / window.innerHeight, 0.1, 1200);
-camera.position.set(0, 90, 220);
+scene.fog = new THREE.Fog(0x87b5e0, 220, 850);
+const camera = new THREE.PerspectiveCamera(62, window.innerWidth / window.innerHeight, 0.1, 2000);
+camera.position.set(-260, 12, 270);
 
-const city = buildCity(scene);
-const landmarks = city.landmarks;
-const player = createPlayer(scene);
-let currentCar = createPlayerCar(scene, save.paint);
-const traffic = createTraffic(scene);
-const police = createPolice(scene, audio);
-const hud = createHud(document, save);
-const radio = createRadio(audio);
-const garage = createGarage(document, save, currentCar, audio, () => writeSave(save));
-const weapons = createWeapons(scene, camera, save, audio, (n) => police.addHeat(n));
-
-let mode = 'menu'; // menu | play | pause
-let driving = false;
-let health = 100;
-let armor = save.upgrades.armor ? 100 : 0;
-let clockMin = 600; // 10:00
-let timeName = 'day';
-let cameraYaw = 0;
-let cameraLocked = false;
-const camPos = new THREE.Vector3();
-const camLook = new THREE.Vector3();
-let nitroTimer = 0;
-let nitroCooldown = 0;
-let saveTimer = 0;
-let shake = 0;
-let crashCooldown = 0;
-let lastTrackerId = undefined;
-
-const missions = createMissions(scene, landmarks, save, audio, (kind, data) => {
-  if (kind === 'banner') hud.showBanner(data, 5);
-  if (kind === 'wanted') police.setWanted(Math.max(police.wanted, data));
-  if (kind === 'night') setTimeOfDay('night');
-  if (kind === 'complete') {
-    writeSave(save);
-    hud.renderTracker(null);
-  }
-});
-
-function setTimeOfDay(name) {
-  timeName = name;
-  city.setTimeOfDay(name);
-}
-
-function clockText() {
-  const h = Math.floor(clockMin / 60) % 24;
-  const m = Math.floor(clockMin % 60);
-  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-}
-
-function setMode(next) {
-  mode = next;
-  const modeEl = document.getElementById('menu-overlay');
-  modeEl.style.display = next === 'menu' ? 'flex' : 'none';
-  if (next === 'menu') {
-    const done = save.missionsDone.length;
-    const prog = document.getElementById('menu-progress');
-    if (prog) prog.textContent = done > 0 ? `Progres: ${done}/8 misi selesai • Uang $${save.money}` : 'Misi baru: 0/8 selesai — temui Bu Sari!';
-  }
-  document.getElementById('pause-overlay').style.display = next === 'pause' ? 'flex' : 'none';
-  document.getElementById('hud').style.display = next === 'menu' ? 'none' : 'block';
-  if (next === 'play') {
-    audio.unlock();
-    radio.start();
-  }
-}
-
-function nearestAiCar(maxDist) {
-  let best = null;
-  let bestD = maxDist;
-  for (const c of traffic.cars) {
-    const d = c.pos.distanceTo(player.pos);
-    if (d < bestD) { bestD = d; best = c; }
-  }
-  return best;
-}
-
-function stealCar(aiCar) {
-  const idx = traffic.cars.indexOf(aiCar);
-  if (idx >= 0) traffic.cars.splice(idx, 1);
-  // Raka takes over: the player's car jumps to the stolen car's spot
-  // and colour, the AI car leaves the scene.
-  const stolenColor = aiCar.mesh.children[0] ? aiCar.mesh.children[0].material.color : null;
-  scene.remove(aiCar.mesh);
-  currentCar.mesh.position.copy(aiCar.pos);
-  currentCar.heading = aiCar.heading;
-  currentCar.mesh.rotation.y = aiCar.heading;
-  currentCar.speed = 0;
-  currentCar.name = 'Mobil Curian';
-  if (stolenColor) {
-    currentCar.mesh.traverse((o) => {
-      if (o.isMesh && o.position.y === 0.62) o.material.color.copy(stolenColor);
-    });
-  }
-  driving = true;
-  police.addHeat(1);
-  hud.showBanner('MOBIL DICURI! Polisi mengejarmu — Wanted naik!', 4);
-  audio.horn();
-}
-
-function enterCar() {
-  driving = true;
-  currentCar.speed = 0;
-  audio.beep();
-}
-
-function exitCar() {
-  driving = false;
-  const side = new THREE.Vector3(Math.cos(currentCar.heading), 0, -Math.sin(currentCar.heading));
-  player.spawn(
-    new THREE.Vector3(
-      currentCar.pos.x + side.x * 3,
-      0,
-      currentCar.pos.z + side.z * 3,
-    ),
-    currentCar.heading,
-  );
-  currentCar.speed = 0;
-}
-
-function respawnAtHospital() {
-  health = 100;
-  armor = save.upgrades.armor ? 100 : 0;
-  save.money = Math.max(0, save.money - 50);
-  police.setWanted(0);
-  if (driving) exitCar();
-  player.spawn(new THREE.Vector3(landmarks.rs.x + 6, 0, landmarks.rs.z + 20), 0);
-  currentCar.mesh.position.set(landmarks.rs.x - 8, 0, landmarks.rs.z + 24);
-  currentCar.heading = 0;
-  currentCar.mesh.rotation.y = 0;
-  currentCar.damage = 0;
-  hud.showBanner('Kamu pingsan! Dibawa ke Rumah Sakit — denda $50.', 5);
-  writeSave(save);
-}
-
-function interact() {
-  if (driving) { exitCar(); return; }
-  const dCar = currentCar.pos.distanceTo(player.pos);
-  if (dCar < 4.5) { enterCar(); return; }
-  const ai = nearestAiCar(4.5);
-  if (ai) { stealCar(ai); return; }
-  const dSari = city.buSari.position.distanceTo(player.pos);
-  if (dSari < 7) {
-    if (missions.active) {
-      hud.showBanner(`MISI BERJALAN: ${missions.active.name} — ${missions.active.desc}`, 4);
-    } else {
-      const def = missions.startNext();
-      if (def) {
-        hud.showBanner(`MISI BARU: ${def.name} — ${def.desc} (hadiah $${def.reward})`, 5);
-        hud.renderTracker(def.id);
-      } else {
-        hud.showBanner('Bu Sari: Semua misi selesai, Raka! Kamu legenda Cakrawala!', 5);
-      }
-    }
-    audio.beep();
-    return;
-  }
-  hud.showBanner('Tidak ada yang bisa dilakukan di sini.', 2);
-}
-
-function collideBuildings(pos, radius) {
-  for (const b of city.colliders) {
-    const dx = pos.x - b.x;
-    const dz = pos.z - b.z;
-    const px = b.hx + radius - Math.abs(dx);
-    const pz = b.hz + radius - Math.abs(dz);
-    if (px > 0 && pz > 0) {
-      if (px < pz) pos.x = b.x + Math.sign(dx || 1) * (b.hx + radius);
-      else pos.z = b.z + Math.sign(dz || 1) * (b.hz + radius);
-      return true;
-    }
-  }
-  return false;
-}
-
-function updateDriving(dt) {
-  const car = currentCar;
-  const turbo = save.upgrades.turbo ? 1.3 : 1;
-  let topSpeed = 38 * turbo;
-  if (nitroTimer > 0) {
-    nitroTimer -= dt;
-    topSpeed *= 1.45;
-  }
-  nitroCooldown = Math.max(0, nitroCooldown - dt);
-  const accel = 13 * turbo;
-  if (input.isDown('KeyW') || input.isDown('ArrowUp')) car.speed += accel * dt;
-  if (input.isDown('KeyS') || input.isDown('ArrowDown')) {
-    car.speed -= car.speed > 0.5 ? 22 * dt : 9 * dt;
-  }
-  if (input.isDown('Space')) car.speed -= Math.sign(car.speed) * 30 * dt;
-  if (save.upgrades.nitro && input.isDown('ShiftLeft') && nitroCooldown <= 0 && car.speed > 5) {
-    nitroTimer = 2.5;
-    nitroCooldown = 8;
-    audio.beep();
-  }
-  // Drag + clamp.
-  car.speed -= car.speed * 0.55 * dt;
-  car.speed = THREE.MathUtils.clamp(car.speed, -11, topSpeed);
-  if (Math.abs(car.speed) < 0.05 && !input.isDown('KeyW')) car.speed = 0;
-  // Steering scales with speed.
-  let steer = 0;
-  if (input.isDown('KeyA') || input.isDown('ArrowLeft')) steer += 1;
-  if (input.isDown('KeyD') || input.isDown('ArrowRight')) steer -= 1;
-  const steerRate = 1.9 * Math.min(1, Math.abs(car.speed) / 9);
-  car.heading += steer * steerRate * Math.sign(car.speed) * dt;
-  const fx = Math.sin(car.heading);
-  const fz = Math.cos(car.heading);
-  car.pos.x += fx * car.speed * dt;
-  car.pos.z += fz * car.speed * dt;
-  car.pos.x = THREE.MathUtils.clamp(car.pos.x, -310, 345);
-  car.pos.z = THREE.MathUtils.clamp(car.pos.z, -310, 345);
-  if (collideBuildings(car.pos, 2.3)) {
-    if (Math.abs(car.speed) > 9 && crashCooldown <= 0) {
-      crashCooldown = 0.6;
-      audio.crash(true);
-      car.damage += 9;
-      if (armor > 0) armor = Math.max(0, armor - 6);
-      else health = Math.max(0, health - 5);
-      shake = 0.35;
-      car.speed *= 0.5;
-    } else if (Math.abs(car.speed) > 3 && crashCooldown <= 0) {
-      crashCooldown = 0.6;
-      audio.crash(false);
-    }
-    // No hard speed cut on a gentle scrape: the car slides along the wall.
-  }
-  car.mesh.rotation.y = car.heading;
-  const wheels = car.mesh.userData.wheels || [];
-  for (const w of wheels) w.rotation.x += (car.speed * dt) / 0.38;
-  // Body lean.
-  car.mesh.rotation.z = THREE.MathUtils.clamp(-steer * Math.abs(car.speed) * 0.004, -0.06, 0.06);
-  cameraYaw = car.heading;
-  audio.engine(Math.abs(car.speed) / topSpeed, true);
-}
-
-function updateCamera(dt) {
-  if (cameraLocked) {
-    camera.position.lerp(camPos, 1 - Math.pow(0.001, dt));
-    camera.lookAt(camLook);
-    return;
-  }
-  if (mode === 'menu') {
-    const t = performance.now() * 0.00004;
-    camera.position.set(Math.cos(t) * 250, 130, Math.sin(t) * 250);
-    camera.lookAt(0, 10, 40);
-    return;
-  }
-  const target = driving ? currentCar.pos : player.pos;
-  const heading = driving ? currentCar.heading : player.heading;
-  const dist = driving ? 12.5 : 7.5;
-  const height = driving ? 5 : 3.4;
-  const fx = Math.sin(heading);
-  const fz = Math.cos(heading);
-  const want = new THREE.Vector3(target.x - fx * dist, height, target.z - fz * dist);
-  camera.position.lerp(want, 1 - Math.pow(0.0001, dt));
-  camera.lookAt(target.x + fx * 6, 1.6, target.z + fz * 6);
-  if (shake > 0) {
-    shake -= dt;
-    camera.position.x += (Math.random() - 0.5) * shake * 0.6;
-    camera.position.y += (Math.random() - 0.5) * shake * 0.6;
-  }
-}
-
-function promptText() {
-  if (driving) return 'E — Keluar mobil • Spasi — Rem tangan • Q — Roda Senjata • R — Radio • G — Garasi';
-  if (currentCar.pos.distanceTo(player.pos) < 4.5) return `E — Masuk ${currentCar.name}`;
-  if (nearestAiCar(4.5)) return 'E — Curi mobil';
-  if (city.buSari.position.distanceTo(player.pos) < 7) return 'E — Bicara Bu Sari (misi)';
-  if (weapons.wheelOpen) return 'Pilih senjata: klik / tombol 1-3 • F — Serang';
-  return 'WASD — Jalan • E — Interaksi • Q — Roda Senjata • R — Radio • G — Garasi';
-}
-
-function tick() {
-  requestAnimationFrame(tick);
-  const dt = Math.min(0.05, clock.getDelta());
-  if (mode === 'play') {
-    clockMin += dt * 2;
-    crashCooldown = Math.max(0, crashCooldown - dt);
-    if (clockMin >= 1440) clockMin -= 1440;
-    const hour = Math.floor(clockMin / 60);
-    const wantTime = hour >= 17 && hour < 19 ? 'sunset' : (hour >= 19 || hour < 6 ? 'night' : 'day');
-    if (wantTime !== timeName && !cameraLocked) setTimeOfDay(wantTime);
-
-    // Pause toggle.
-    if (input.wasPressed('Escape')) { setMode('pause'); input.consume('Escape'); }
-    // Radio.
-    if (input.wasPressed('KeyR')) {
-      radio.next();
-      hud.showBanner(`RADIO: ${radio.name}`, 2);
-      audio.click();
-    }
-    // Garage.
-    if (input.wasPressed('KeyG')) {
-      const open = garage.toggle();
-      hud.showGarage(open, save.money);
-      audio.click();
-    }
-    // Weapon wheel: hold Q, or toggle with Tab.
-    if (input.isDown('KeyQ') || input.wasPressed('Tab')) {
-      if (!weapons.wheelOpen) { weapons.setWheel(true); hud.showWheel(true); }
-    } else if (weapons.wheelOpen && !input.isDown('KeyQ')) {
-      weapons.setWheel(false);
-      hud.showWheel(false);
-    }
-    if (weapons.wheelOpen) {
-      if (input.wasPressed('Digit1')) weapons.select(0);
-      if (input.wasPressed('Digit2')) weapons.select(1);
-      if (input.wasPressed('Digit3')) weapons.select(2);
-      hud.markWheel(weapons.selected);
-    }
-    // Attack (not while the garage panel or weapon wheel is open).
-    if ((input.wasPressed('KeyF') || (input.mouse.clicked && !weapons.wheelOpen && !garage.isOpen)) && mode === 'play') {
-      const origin = driving
-        ? currentCar.pos.clone().add(new THREE.Vector3(0, 1.5, 0))
-        : player.pos.clone().add(new THREE.Vector3(0, 1.5, 0));
-      const dir = new THREE.Vector3();
-      camera.getWorldDirection(dir);
-      weapons.attack(origin, dir, traffic, police, driving);
-    }
-    // Interact.
-    if (input.wasPressed('KeyE')) interact();
-    // Horn.
-    if (input.wasPressed('KeyH') && driving) audio.horn();
-
-    if (!garage.isOpen) {
-      if (driving) updateDriving(dt);
-      else player.update(dt, input, cameraYaw);
-    }
-    // Raka sits inside the car while driving — hide the on-foot figure.
-    player.mesh.visible = !driving;
-    const focusPos = driving ? currentCar.pos : player.pos;
-    traffic.update(dt, driving ? currentCar.pos : null, () => {
-      police.addHeat(1);
-      audio.crash(true);
-      hud.showBanner('Kamu menabrak pejalan kaki! Wanted naik!', 3);
-    });
-    missions.update(dt, focusPos);
-    police.update(dt, focusPos, driving ? currentCar.speed : player.speed, () => {
-      audio.crash(true);
-      shake = 0.4;
-      if (armor > 0) armor = Math.max(0, armor - 8);
-      else health = Math.max(0, health - 6);
-      currentCar.damage += 6;
-      currentCar.speed *= 0.55;
-    });
-    weapons.update(dt);
-    radio.update(dt);
-    audio.siren(police.wanted > 0, dt);
-    if (health <= 0) respawnAtHospital();
-
-    saveTimer += dt;
-    if (saveTimer > 10) { saveTimer = 0; writeSave(save); }
-
-    hud.update(dt, {
-      money: save.money,
-      health,
-      armor,
-      wanted: police.wanted,
-      speedKmh: driving ? currentCar.speed * 3.6 : 0,
-      clockText: clockText(),
-      radioStation: radio.name,
-      headingDeg: THREE.MathUtils.radToDeg(cameraYaw),
-      playerPos: focusPos,
-      heading: driving ? currentCar.heading : player.heading,
-      trafficCars: traffic.cars,
-      policeCars: police.cars,
-      heli: police.heli,
-      missionTarget: missions.targetPosition(),
-      landmarks,
-    });
-    hud.setPrompt(promptText());
-    const trackerId = missions.active ? missions.active.id : null;
-    if (trackerId !== lastTrackerId) {
-      lastTrackerId = trackerId;
-      hud.renderTracker(trackerId);
-    }
-  } else if (mode === 'pause') {
-    if (input.wasPressed('Escape')) setMode('play');
-    audio.engine(0, false);
-    audio.siren(false, dt);
-  }
-  updateCamera(dt);
-  renderer.render(scene, camera);
-  input.endFrame();
-}
-
-// --- Wiring for shots.js + the debug interface ---
-const W = {
-  scene,
-  camera,
-  save,
-  city,
-  landmarks,
-  player,
-  traffic,
-  police,
-  missions,
-  hud,
-  radio,
-  garage,
-  weapons,
-  buSari: city.buSari,
-  setMode,
-  setTimeOfDay,
-  lockCamera(pos, lookAt) {
-    cameraLocked = true;
-    camPos.copy(pos);
-    camLook.copy(lookAt);
-  },
-};
-Object.defineProperty(W, 'car', { get() { return currentCar; } });
-Object.defineProperty(W, 'driving', {
-  get() { return driving; },
-  set(v) { driving = v; },
-});
-
-const clock = new THREE.Clock();
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
-document.getElementById('btn-start').addEventListener('click', () => {
-  audio.unlock();
-  setMode('play');
-  hud.renderTracker(null);
-  hud.showBanner('Selamat datang di KOTA CAKRAWALA! Temui Bu Sari di bengkel.', 5);
-});
-document.getElementById('btn-resume').addEventListener('click', () => setMode('play'));
-document.getElementById('btn-restart').addEventListener('click', () => {
-  const fresh = loadSave();
-  save.money = fresh.money;
-  setMode('play');
-});
-document.getElementById('btn-close-garage').addEventListener('click', () => {
-  garage.close();
-  hud.showGarage(false, save.money);
-});
-document.querySelectorAll('.wheel-seg').forEach((seg) => {
-  seg.addEventListener('click', () => {
-    weapons.select(Number(seg.dataset.idx));
-    hud.markWheel(weapons.selected);
-  });
-});
+// --- Dunia ---
+const city = buildCity(scene);
+const colliders = city.colliders;
+const player = createPlayer(scene, colliders);
+const traffic = createTraffic(scene, colliders);
+const police = createPolice(scene, audio);
+const missions = createMissions(scene, city.landmarks, save, audio, onMissionEvent);
+const collectibles = createCollectibles(scene, save, audio, onRelicEvent);
+const weapons = createWeapons(scene, camera, save, audio, onWeaponHeat);
+const garage = createGarage(save, districts, onGarageApply);
 
-// Debug interface used by the playtest + screenshot tools.
-window.__game = {
+// Mobil pemain (aktif dari save)
+let car = createPlayerCar(scene, save.paintIndex, carById(save.activeCarId), save.upgrades);
+car.pos.set(-252, 0, 240);
+car.heading = Math.PI * 0.75;
+
+// --- State game ---
+let mode = 'menu';
+let driving = false;
+let health = save.health ?? 100;
+let armor = save.armor ?? 0;
+let gameMinutes = 17 * 60; // mulai senja 17:00
+let timeSegment = '';
+let cameraLock = null;
+let wheelViaQ = false;
+let prevMouseDown = false;
+let saveTimer = 0;
+let camPos = new THREE.Vector3(-260, 12, 270);
+let camLook = new THREE.Vector3(-248, 2, 232);
+
+function setGameTime(h, m) {
+  gameMinutes = h * 60 + m;
+  applyTimeSegment(true);
+}
+
+function applyTimeSegment(force) {
+  const h = Math.floor(gameMinutes / 60) % 24;
+  const seg = (h >= 17 && h < 19) ? 'senja' : (h >= 19 || h < 6) ? 'malam' : 'siang';
+  if (force || seg !== timeSegment) {
+    timeSegment = seg;
+    city.setTimeOfDay(seg);
+    scene.fog.color.setHex(seg === 'senja' ? 0xd98a5a : seg === 'malam' ? 0x0b1030 : 0x87b5e0);
+  }
+}
+
+function lockCamera(pos, lookAt) {
+  cameraLock = { pos: pos.clone(), lookAt: lookAt.clone() };
+}
+
+function clockText() {
+  const h = Math.floor(gameMinutes / 60) % 24;
+  const m = Math.floor(gameMinutes % 60);
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+// --- Event misi ---
+function onMissionEvent(kind, def) {
+  if (kind === 'start') {
+    if (def.wanted) police.setWanted(def.wanted);
+    if (def.forceNight) setGameTime(21, 0);
+    hud.showBanner(`Misi: ${def.name} — $${def.reward} • ${def.time} dtk`);
+    audio.click();
+  } else if (kind === 'done') {
+    save.money += def.reward;
+    const dId = districts.at(city.landmarks[def.target].x, city.landmarks[def.target].z);
+    districts.addRep(dId, 5);
+    save.missionsDone.push(def.id);
+    audio.success();
+    if (def.id === 'm4') hud.showBanner('BABAK 2 DIMULAI — Utang & Jalanan!', 4);
+    else if (def.id === 'm8') hud.showBanner('BABAK TERAKHIR DIMULAI — Legenda Cakrawala!', 4);
+    else if (def.id === 'm12') {
+      save.money += 500;
+      save.legendBonus = true;
+      hud.showBanner('Kamu legenda Cakrawala! Bonus $500!', 5);
+    } else {
+      hud.showBanner(`Misi selesai! +$${def.reward}`, 3);
+    }
+    storeSave(save);
+  } else if (kind === 'fail') {
+    audio.fail();
+    hud.showBanner('Misi gagal — bicara lagi ke Bu Sari untuk mengulang.', 3.5);
+  }
+}
+
+function onRelicEvent(r) {
+  save.money += 50;
+  districts.addRep(r.district, 5);
+  const n = collectibles.count;
+  if (n >= 20 && !save.allRelicsBonus) {
+    save.allRelicsBonus = true;
+    save.money += 500;
+    hud.showBanner('SEMUA 20 RELIK! Bonus $500!', 5);
+  } else {
+    hud.showBanner(`Relik ${n}/20! +$50 • Rep ${districtName(r.district)} +5`, 2.5);
+  }
+  storeSave(save);
+}
+
+function onWeaponHeat(n, target) {
+  const dId = districts.at(player.pos.x, player.pos.z);
+  districts.addRep(dId, -8);
+  police.addHeat(1, districts.heatMultiplierAt(player.pos.x, player.pos.z));
+}
+
+function onGarageApply(kind, data) {
+  if (kind === 'select' || kind === 'buy') {
+    scene.remove(car.mesh);
+    car = createPlayerCar(scene, save.paintIndex, carById(save.activeCarId), save.upgrades);
+    const p = driving ? car.pos : player.pos;
+    car.pos.set(p.x + 3, 0, p.z + 3);
+    car.heading = 0;
+    hud.showBanner(`Mobil aktif: ${carById(save.activeCarId).name}`, 2.5);
+  } else if (kind === 'paint') {
+    car.setPaint(save.paintIndex);
+  } else if (kind === 'upgrade') {
+    if (data === 'armorUp') armor = 100;
+    hud.showBanner('Upgrade terpasang!', 2.5);
+  } else if (kind === 'ammo') {
+    hud.showBanner('Amunisi diisi ulang!', 2.5);
+  }
+  audio.cash();
+  storeSave(save);
+}
+
+// --- Interaksi ---
+function nearestAiCar(maxD) {
+  let best = null;
+  let bestD = maxD;
+  for (const c of traffic.cars) {
+    const d = Math.hypot(c.pos.x - player.pos.x, c.pos.z - player.pos.z);
+    if (d < bestD) { bestD = d; best = c; }
+  }
+  return best;
+}
+
+function stealCar(aiCar) {
+  const def = CARS[Math.floor(Math.random() * CARS.length)];
+  scene.remove(car.mesh);
+  aiCar.mesh.visible = false;
+  aiCar.pos.set(0, -100, 0);
+  car = createPlayerCar(scene, save.paintIndex, def, save.upgrades);
+  car.pos.set(aiCar.pos.x, 0, aiCar.pos.z);
+  car.heading = aiCar.heading;
+  driving = true;
+  police.addHeat(1, districts.heatMultiplierAt(player.pos.x, player.pos.z));
+  districts.addRep(districts.at(player.pos.x, player.pos.z), -8);
+  hud.showBanner('Mobil dicuri! Wanted +1', 2.5);
+  audio.engineStart();
+}
+
+function enterCar() {
+  driving = true;
+  audio.engineStart();
+}
+
+function exitCar() {
+  driving = false;
+  player.spawn(new THREE.Vector3(car.pos.x + 3, 0, car.pos.z + 2), car.heading);
+  audio.engineStop();
+}
+
+function respawn() {
+  health = 100;
+  armor = save.upgrades.armorUp ? 100 : 0;
+  save.money = Math.max(0, save.money - 50);
+  police.reset();
+  driving = false;
+  player.spawn(new THREE.Vector3(120, 0, -104), 0);
+  hud.showBanner('Kamu tertangkap! Respawn di RS — denda $50', 4);
+  storeSave(save);
+}
+
+function damagePlayer(amount) {
+  if (armor > 0) {
+    const absorbed = Math.min(armor, amount);
+    armor -= absorbed;
+    amount -= absorbed;
+  }
+  health -= amount;
+  if (health <= 0) { health = 0; respawn(); }
+}
+
+// --- Kandidat target senjata ---
+function weaponTargets() {
+  const list = [];
+  for (const p of traffic.peds) {
+    if (!p.mesh.visible) continue;
+    list.push({
+      pos: p.pos, kind: 'ped',
+      onHit: () => {
+        p.mesh.visible = false;
+        p.pos.set(0, -100, 0);
+        police.addHeat(1, districts.heatMultiplierAt(p.pos.x, p.pos.z));
+        districts.addRep(districts.at(p.pos.x, p.pos.z), -8);
+        hud.showBanner('Kamu menyerang pejalan kaki! Wanted +1', 2.5);
+      },
+    });
+  }
+  for (const c of police.cars) {
+    if (!c.active) continue;
+    list.push({
+      pos: c.pos, kind: 'police',
+      onHit: () => {
+        c.speed *= 0.4;
+        police.addHeat(1, 1);
+        hud.showBanner('Kamu menyerang polisi! Wanted +1', 2.5);
+      },
+    });
+  }
+  return list;
+}
+
+// --- Game object (antarmuka debug) ---
+const game = {
   get mode() { return mode; },
+  set mode(v) { mode = v; },
   get driving() { return driving; },
-  get carState() {
-    return {
-      get pos() { return currentCar.pos; },
-      get speed() { return currentCar.speed; },
-    };
-  },
+  set driving(v) { driving = v; },
+  get carState() { return { pos: car.pos, speed: car.speed }; },
+  get car() { return car; },
   player,
-  get police() { return { wanted: police.wanted }; },
-  get missions() {
-    return { active: missions.active ? { def: missions.active } : null };
-  },
+  police,
+  missions,
   save,
+  collectibles,
+  districts: {
+    get current() { return districts.at(player.pos.x, player.pos.z); },
+    get rep() { return { ...save.rep }; },
+  },
+  vehicles: {
+    get owned() { return [...save.ownedCars]; },
+    get active() { return save.activeCarId; },
+  },
   buSari: city.buSari,
+  city,
+  hud,
+  setGameTime,
+  lockCamera,
 };
+window.__game = game;
 
-hud.renderTracker(null);
-setMode('menu');
+// --- Tombol menu ---
+document.getElementById('btn-start').addEventListener('click', startGame);
+document.getElementById('btn-resume').addEventListener('click', () => {
+  mode = 'main';
+  document.getElementById('pause-overlay').classList.remove('on');
+});
+document.getElementById('btn-restart').addEventListener('click', () => {
+  clearSave();
+  location.reload();
+});
+document.getElementById('btn-close-garage').addEventListener('click', () => garage.close());
+
+function startGame() {
+  mode = 'main';
+  document.getElementById('menu-overlay').classList.add('off');
+  document.getElementById('hud').classList.add('on');
+  audio.ensure();
+  audio.engineStop();
+  radio.start();
+  hud.showBanner('Bicara dengan Bu Sari (tanda ▼ kuning) untuk misi pertama!', 4);
+}
+
+// --- Loop utama ---
+const clock = new THREE.Clock();
+let elapsed = 0;
+
+function currentInput() {
+  return {
+    forward: input.isDown('KeyW') || input.isDown('ArrowUp'),
+    back: input.isDown('KeyS') || input.isDown('ArrowDown'),
+    left: input.isDown('KeyA') || input.isDown('ArrowLeft'),
+    right: input.isDown('KeyD') || input.isDown('ArrowRight'),
+    handbrake: input.isDown('Space'),
+    nitro: input.isDown('ShiftLeft') || input.isDown('ShiftRight'),
+  };
+}
+
+function handleKeys() {
+  if (input.pressed('Escape')) {
+    if (garage.isOpen) { garage.close(); return; }
+    if (mode === 'main') {
+      mode = 'pause';
+      document.getElementById('pause-overlay').classList.add('on');
+    } else if (mode === 'pause') {
+      mode = 'main';
+      document.getElementById('pause-overlay').classList.remove('on');
+    }
+    return;
+  }
+  if (mode !== 'main') return;
+
+  if (input.pressed('KeyG')) {
+    garage.toggle(driving ? car.pos : player.pos);
+    return;
+  }
+  if (garage.isOpen) return;
+
+  if (input.pressed('KeyR')) {
+    hud.showBanner(`Radio: ${radio.next()}`, 2);
+    return;
+  }
+  if (input.pressed('KeyH')) audio.horn();
+
+  if (input.pressed('KeyE')) {
+    const origin = driving ? car.pos : player.pos;
+    const dBuSari = Math.hypot(player.pos.x - city.buSari.position.x, player.pos.z - city.buSari.position.z);
+    if (driving) { exitCar(); return; }
+    const dCar = Math.hypot(player.pos.x - car.pos.x, player.pos.z - car.pos.z);
+    if (dCar < 6) { enterCar(); return; }
+    if (dBuSari < 5) {
+      if (missions.active) {
+        hud.showBanner('Misi sedang berjalan — selesaikan dulu!', 2.5);
+      } else if (missions.next()) {
+        missions.startNext();
+      } else {
+        hud.showBanner('Semua 12 misi selesai — kamu legenda Cakrawala!', 3);
+      }
+      return;
+    }
+    const ai = nearestAiCar(5);
+    if (ai) { stealCar(ai); return; }
+  }
+
+  // Roda senjata
+  if (input.isDown('KeyQ') && !wheelViaQ) {
+    wheelViaQ = true;
+    weapons.openWheel();
+  } else if (!input.isDown('KeyQ') && wheelViaQ) {
+    wheelViaQ = false;
+    weapons.closeWheel();
+  }
+  if (input.pressed('Tab')) {
+    if (weapons.isOpen) weapons.closeWheel();
+    else weapons.openWheel();
+  }
+  if (weapons.isOpen) {
+    if (input.pressed('Digit1')) weapons.select(0);
+    if (input.pressed('Digit2')) weapons.select(1);
+    if (input.pressed('Digit3')) weapons.select(2);
+    weapons.pickFromMouse(input.mouse.x, input.mouse.y);
+  } else {
+    if (input.pressed('Digit1')) weapons.select(0);
+    if (input.pressed('Digit2')) weapons.select(1);
+    if (input.pressed('Digit3')) weapons.select(2);
+  }
+  if (input.pressed('KeyF') || (input.mouse.down && !prevMouseDown)) {
+    const origin = driving ? car.pos : player.pos;
+    const heading = driving ? car.heading : player.heading;
+    const dir = new THREE.Vector3(Math.sin(heading), 0, Math.cos(heading));
+    weapons.attack(origin, dir, weaponTargets());
+  }
+}
+
+function computePrompt() {
+  if (mode !== 'main' || garage.isOpen) return '';
+  if (driving) return 'E — Keluar mobil';
+  if (missions.active) return `Misi: ${missions.active.def.name} — ${Math.ceil(missions.timer)} dtk`;
+  const dBuSari = Math.hypot(player.pos.x - city.buSari.position.x, player.pos.z - city.buSari.position.z);
+  const dCar = Math.hypot(player.pos.x - car.pos.x, player.pos.z - car.pos.z);
+  if (dBuSari < 5) {
+    const n = missions.next();
+    return n ? `E — Bicara Bu Sari (Misi: ${n.name})` : 'Bu Sari: Semua misi selesai!';
+  }
+  if (dCar < 6) return `E — Masuk ${carById(save.activeCarId).name}`;
+  if (nearestAiCar(5)) return 'E — Curi mobil (Wanted +1)';
+  return '';
+}
+
+function updateCamera(dt) {
+  if (cameraLock) {
+    camera.position.copy(cameraLock.pos);
+    camera.lookAt(cameraLock.lookAt);
+    return;
+  }
+  const target = driving ? car.pos : player.pos;
+  const heading = driving ? car.heading : player.heading;
+  const dist = driving ? 13 : 9;
+  const height = driving ? 5 : 4.5;
+  const fx = Math.sin(heading);
+  const fz = Math.cos(heading);
+  const desired = new THREE.Vector3(target.x - fx * dist, height, target.z - fz * dist);
+  camPos.lerp(desired, Math.min(1, dt * 5));
+  camera.position.copy(camPos);
+  camLook.lerp(new THREE.Vector3(target.x + fx * 5, 1.6, target.z + fz * 5), Math.min(1, dt * 7));
+  camera.lookAt(camLook);
+}
+
+function tick() {
+  requestAnimationFrame(tick);
+  const dt = Math.min(clock.getDelta(), 0.05);
+  elapsed += dt;
+
+  handleKeys();
+  prevMouseDown = input.mouse.down;
+
+  if (mode === 'main') {
+    gameMinutes += dt * 0.5; // 1 jam game per 120 dtk
+    applyTimeSegment(false);
+    const inp = currentInput();
+
+    if (driving) {
+      car.update(dt, inp, colliders);
+      player.update(dt, inp, true);
+      // Tabrak pejalan kaki saat mengemudi
+      for (const p of traffic.peds) {
+        if (!p.mesh.visible) continue;
+        const d = Math.hypot(p.pos.x - car.pos.x, p.pos.z - car.pos.z);
+        if (d < 2.2 && Math.abs(car.speed) > 3) {
+          p.mesh.visible = false;
+          p.pos.set(0, -100, 0);
+          police.addHeat(1, districts.heatMultiplierAt(car.pos.x, car.pos.z));
+          districts.addRep(districts.at(car.pos.x, car.pos.z), -8);
+          audio.crash();
+          damagePlayer(3);
+          hud.showBanner('Kamu menabrak pejalan kaki! Wanted +1', 2.5);
+        }
+      }
+    } else {
+      player.update(dt, inp, false);
+    }
+
+    traffic.update(dt, elapsed);
+    police.update(dt, driving ? car.pos : player.pos, driving ? Math.abs(car.speed) : 0, () => {
+      audio.crash();
+      damagePlayer(8);
+    });
+    missions.update(dt, driving ? car.pos : player.pos, elapsed);
+    collectibles.update(dt, driving ? car.pos : player.pos, districts.at.bind(districts), elapsed);
+    weapons.update(dt);
+    city.update(dt, elapsed);
+    audio.engine(driving ? Math.abs(car.speed) / car.topSpeed() : 0, driving);
+
+    saveTimer += dt;
+    if (saveTimer > 10) {
+      saveTimer = 0;
+      save.health = Math.round(health);
+      save.armor = Math.round(armor);
+      storeSave(save);
+    }
+  } else {
+    traffic.update(dt * 0.3, elapsed);
+    city.update(dt, elapsed);
+  }
+
+  updateCamera(dt);
+
+  const heading = driving ? car.heading : player.heading;
+  const focusPos = driving ? car.pos : player.pos;
+  const snap = {
+    money: save.money,
+    health,
+    armor,
+    wanted: police.wanted,
+    speedKmh: driving ? Math.abs(car.speed) * 3.6 : 0,
+    clockText: clockText(),
+    radioStation: radio.name,
+    headingDeg: (-heading * 180) / Math.PI,
+    heading,
+    playerPos: driving ? car.pos : player.pos,
+    trafficCars: traffic.cars,
+    policeCars: police.cars,
+    heli: police.heli,
+    missionTarget: missions.targetPosition(),
+    landmarks: city.landmarks,
+    relicsFound: collectibles.count,
+    relicsTotal: collectibles.total,
+    relicPositions: RELICS.filter((r) => !save.relicsFound.includes(r.id)),
+    districtName: districtName(districts.at(focusPos.x, focusPos.z)),
+    districtRep: districts.rep(districts.at(focusPos.x, focusPos.z)),
+    districtList: districts.list(),
+    garages: city.garages,
+    missionActive: missions.active,
+    missionActiveId: missions.active ? missions.active.def.id : null,
+    missionTimer: missions.timer,
+    missionsDone: save.missionsDone,
+    currentAct: missions.currentAct(),
+    prompt: computePrompt(),
+  };
+  hud.update(dt, snap);
+  renderer.render(scene, camera);
+}
+
+setupShots(game);
+if (!new URLSearchParams(location.search).get('shot')) {
+  // Mode normal: menu tampil, game siap.
+  document.getElementById('menu-overlay').classList.remove('off');
+}
 tick();
 window.__gameReady = true;
-
-// Screenshot staging (only when ?shot= is present).
-if (new URLSearchParams(window.location.search).has('shot')) {
-  applyShot(W);
-}

@@ -3,89 +3,103 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Kota Cakrawala — Open World</title>
+<title>Kota Cakrawala — Open World Crime</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  html, body { width: 100%; height: 100%; overflow: hidden; background: #0a1030;
-    font-family: 'Segoe UI', Arial, sans-serif; color: #fff; }
-  #game-root, #game-root canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
-  #hud { position: fixed; inset: 0; pointer-events: none; display: none; z-index: 5; }
-  .panel { background: rgba(8, 14, 22, 0.72); border: 1px solid rgba(255,255,255,0.18);
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #0b1020;
+    font-family: "Segoe UI", Arial, sans-serif; color: #fff; }
+  #game-root { position: fixed; inset: 0; }
+  #game-root canvas { display: block; }
+  #hud { position: fixed; inset: 0; pointer-events: none; z-index: 5; display: none; }
+  #hud.on { display: block; }
+  .panel { background: rgba(8, 12, 24, 0.72); border: 1px solid rgba(255,255,255,0.18);
     border-radius: 10px; padding: 8px 12px; backdrop-filter: blur(2px); }
-  #hud-top-left { position: absolute; top: 12px; left: 12px; min-width: 230px; }
-  #hud-money { font-size: 26px; font-weight: 800; color: #7dff8a; text-shadow: 0 2px 4px #000; }
-  .bar-row { display: flex; align-items: center; gap: 6px; margin-top: 5px; font-size: 11px; font-weight: 700; }
-  .bar { flex: 1; height: 10px; background: rgba(255,255,255,0.18); border-radius: 5px; overflow: hidden; }
-  .bar > div { height: 100%; transition: width 0.2s; }
-  #hud-health-fill { background: linear-gradient(90deg, #37d67a, #7dff8a); width: 100%; }
-  #hud-armor-fill { background: linear-gradient(90deg, #3aa0ff, #7ac8ff); width: 0%; }
-  #hud-stars { font-size: 22px; letter-spacing: 2px; margin-top: 4px; color: #888; text-shadow: 0 0 6px #000; }
-  #hud-top-right { position: absolute; top: 12px; right: 12px; text-align: right; }
-  #hud-clock { font-size: 22px; font-weight: 800; }
-  #hud-radio { font-size: 13px; color: #ffd23e; margin-top: 2px; }
-  #hud-speed { font-size: 30px; font-weight: 800; margin-top: 4px; text-shadow: 0 2px 4px #000; }
-  #hud-compass { font-size: 12px; letter-spacing: 2px; color: #cfe8ff; margin-top: 2px; }
-  #hud-tracker { position: absolute; top: 150px; left: 12px; width: 250px; font-size: 12px; }
-  #hud-tracker h3 { font-size: 12px; color: #ffd23e; margin-bottom: 5px; letter-spacing: 1px; }
-  .tracker-row { padding: 2px 0; color: #dfe8f2; opacity: 0.85; }
-  .tracker-row.active { color: #ffd23e; font-weight: 800; opacity: 1; }
-  .tracker-row.done { color: #7dff8a; opacity: 0.8; text-decoration: line-through; }
-  #hud-minimap { position: absolute; right: 12px; bottom: 12px; width: 190px; height: 190px;
-    border: 2px solid rgba(255,255,255,0.35); border-radius: 10px; background: rgba(8,14,22,0.7); }
-  #hud-banner { position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
-    max-width: 640px; text-align: center; font-size: 17px; font-weight: 800; color: #ffd23e;
-    text-shadow: 0 2px 6px #000; opacity: 0; transition: opacity 0.3s; padding: 8px 18px; }
-  #hud-prompt { position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%);
-    font-size: 14px; font-weight: 700; background: rgba(8,14,22,0.75); border: 1px solid rgba(255,255,255,0.2);
-    border-radius: 8px; padding: 7px 16px; white-space: nowrap; }
-  #hud-controls { position: absolute; bottom: 14px; left: 12px; font-size: 11px; color: #cfe0f0;
-    line-height: 1.6; }
-  .overlay { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center;
-    justify-content: center; text-align: center; z-index: 10;
-    background: linear-gradient(180deg, rgba(10,16,48,0.82), rgba(255,120,40,0.35) 70%, rgba(10,16,48,0.9)); }
-  .overlay h1 { font-size: 64px; font-weight: 900; letter-spacing: 3px; color: #ffd23e;
-    text-shadow: 0 4px 0 #c22a2a, 0 8px 24px #000; }
-  .overlay h2 { font-size: 20px; color: #fff; margin-top: 6px; font-weight: 600; }
-  .overlay p { max-width: 560px; margin-top: 14px; font-size: 15px; line-height: 1.6; color: #e8eef5; }
-  .overlay button { pointer-events: auto; margin-top: 22px; font-size: 20px; font-weight: 800;
-    padding: 14px 44px; border: none; border-radius: 12px; cursor: pointer;
-    background: linear-gradient(180deg, #ffd23e, #f5a623); color: #221100;
-    box-shadow: 0 6px 0 #a86a00, 0 10px 24px rgba(0,0,0,0.5); }
-  .overlay button:hover { filter: brightness(1.08); }
-  .overlay button:active { transform: translateY(4px); box-shadow: 0 2px 0 #a86a00; }
-  .keys { margin-top: 18px; font-size: 13px; color: #cfe0f0; line-height: 1.9; }
-  #menu-progress { margin-top: 12px; font-size: 14px; color: #7dff8a; font-weight: 700; }
+  #hud-topleft { position: absolute; top: 12px; left: 12px; min-width: 240px; }
+  #hud-money { font-size: 26px; font-weight: 800; color: #7dff9b; text-shadow: 0 2px 4px #000; }
+  .bar-row { display: flex; align-items: center; gap: 6px; margin-top: 5px; font-size: 12px; }
+  .bar { flex: 1; height: 10px; background: rgba(255,255,255,0.2); border-radius: 5px; overflow: hidden; }
+  .bar > div { height: 100%; border-radius: 5px; }
+  #hud-health-fill { background: linear-gradient(90deg, #ff5a5a, #ff9a3d); width: 100%; }
+  #hud-armor-fill { background: linear-gradient(90deg, #4da6ff, #9be7ff); width: 0%; }
+  #hud-stars { font-size: 24px; letter-spacing: 2px; color: #ffd23d; text-shadow: 0 0 8px rgba(255,60,60,0.8); }
+  #hud-stars.hot { color: #ff3b30; animation: blink 0.7s infinite alternate; }
+  @keyframes blink { from { opacity: 1; } to { opacity: 0.55; } }
+  #hud-speed { font-size: 30px; font-weight: 800; }
+  #hud-speed small { font-size: 13px; font-weight: 400; color: #cfe3ff; }
+  #hud-clock { font-size: 15px; color: #ffe9a8; }
+  #hud-radio { font-size: 13px; color: #b9f6ff; margin-top: 2px; }
+  #hud-relics { font-size: 14px; color: #ffd23d; font-weight: 700; margin-top: 3px; }
+  #hud-district { font-size: 13px; color: #d8ffd8; margin-top: 2px; }
+  #hud-topright { position: absolute; top: 12px; right: 12px; text-align: right; }
+  #hud-minimap { width: 190px; height: 190px; border-radius: 10px; border: 2px solid rgba(255,255,255,0.35);
+    background: #101c2e; box-shadow: 0 4px 16px rgba(0,0,0,0.5); }
+  #hud-compass { margin-top: 5px; font-size: 14px; letter-spacing: 3px; color: #ffe9a8;
+    background: rgba(8,12,24,0.72); border-radius: 8px; padding: 3px 8px; display: inline-block; }
+  #hud-tracker { position: absolute; top: 12px; left: 290px; max-width: 260px; font-size: 12px; }
+  #hud-tracker h3 { font-size: 13px; color: #ffd23d; margin-bottom: 4px; }
+  #hud-tracker-list { list-style: none; }
+  #hud-tracker-list li { padding: 1px 0; color: #dfe8ff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #hud-tracker-list li.done { color: #7dff9b; }
+  #hud-tracker-list li.active { color: #ffe9a8; font-weight: 700; }
+  #hud-banner { position: absolute; top: 20%; left: 50%; transform: translateX(-50%);
+    font-size: 26px; font-weight: 800; color: #ffe9a8; text-align: center;
+    text-shadow: 0 2px 10px #000, 0 0 24px rgba(255,180,0,0.5); display: none; }
+  #hud-missionbar { position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+    font-size: 14px; background: rgba(8,12,24,0.78); border: 1px solid #ffd23d;
+    border-radius: 8px; padding: 6px 14px; display: none; }
+  #hud-prompt { position: absolute; bottom: 92px; left: 50%; transform: translateX(-50%);
+    font-size: 16px; font-weight: 700; background: rgba(8,12,24,0.8); border-radius: 8px;
+    padding: 6px 16px; display: none; }
+  #hud-hint { position: absolute; bottom: 12px; left: 12px; font-size: 12px; color: #cfe3ff;
+    background: rgba(8,12,24,0.6); border-radius: 8px; padding: 6px 10px; }
+  #weapon-wheel { position: fixed; left: 50%; top: 50%; width: 260px; height: 260px;
+    transform: translate(-50%,-50%); display: none; z-index: 8; pointer-events: none; }
+  #weapon-wheel.on { display: block; }
+  .wheel-seg { position: absolute; left: 50%; top: 50%; width: 110px; height: 64px;
+    margin: -32px 0 0 -55px; background: rgba(10,16,32,0.85); border: 2px solid #ffd23d;
+    border-radius: 12px; text-align: center; padding-top: 8px; font-size: 14px; font-weight: 700; }
+  .wheel-seg.sel { background: rgba(255,210,61,0.9); color: #111; }
+  .wheel-seg[data-idx="0"] { transform: translate(-120px, -10px); }
+  .wheel-seg[data-idx="1"] { transform: translate(10px, -70px); }
+  .wheel-seg[data-idx="2"] { transform: translate(10px, 50px); }
+  .wheel-seg small { display: block; font-weight: 400; font-size: 11px; }
+  #garage-panel { position: fixed; left: 50%; top: 50%; transform: translate(-50%,-50%);
+    width: 620px; max-width: 94vw; max-height: 88vh; overflow: auto; z-index: 9;
+    background: rgba(8,14,28,0.96); border: 2px solid #ffd23d; border-radius: 14px;
+    padding: 16px 20px; display: none; pointer-events: auto; }
+  #garage-panel.on { display: block; }
+  #garage-panel h2 { color: #ffd23d; margin-bottom: 4px; }
+  #garage-money { color: #7dff9b; font-weight: 700; margin-bottom: 10px; }
+  #garage-list { list-style: none; }
+  #garage-list li { display: flex; justify-content: space-between; align-items: center;
+    gap: 8px; padding: 7px 4px; border-bottom: 1px solid rgba(255,255,255,0.12); font-size: 14px; }
+  #garage-list button, .gbtn { background: #ffd23d; color: #111; border: none; border-radius: 8px;
+    padding: 6px 12px; font-weight: 700; cursor: pointer; pointer-events: auto; }
+  #garage-list button:disabled { background: #555; color: #bbb; cursor: default; }
+  #garage-paints { display: flex; gap: 8px; margin: 10px 0; flex-wrap: wrap; }
+  .paint-dot { width: 30px; height: 30px; border-radius: 50%; border: 3px solid transparent; cursor: pointer; }
+  .paint-dot.sel { border-color: #fff; }
+  .gsec { margin-top: 12px; font-size: 13px; color: #cfe3ff; }
+  .overlay { position: fixed; inset: 0; z-index: 10; display: flex; align-items: center;
+    justify-content: center; background: linear-gradient(160deg, rgba(10,16,40,0.88), rgba(40,16,60,0.82)); }
+  .overlay .card { text-align: center; max-width: 640px; padding: 28px; }
+  .overlay h1 { font-size: 52px; color: #ffd23d; text-shadow: 0 4px 24px rgba(255,150,0,0.6); letter-spacing: 2px; }
+  .overlay h2 { font-size: 18px; color: #b9f6ff; margin: 6px 0 14px; font-weight: 400; }
+  .overlay p { font-size: 14px; color: #dfe8ff; line-height: 1.55; margin: 6px 0; }
+  .overlay button { font-size: 18px; font-weight: 800; background: #ffd23d; color: #111;
+    border: none; border-radius: 12px; padding: 12px 34px; cursor: pointer; margin-top: 16px; }
+  .overlay button:hover { background: #ffe27a; }
+  #menu-progress { font-size: 16px; color: #7dff9b; font-weight: 700; margin-top: 8px; }
+  #menu-rep { margin: 12px auto 0; max-width: 420px; text-align: left; font-size: 13px; }
+  #menu-rep .rrow { display: flex; align-items: center; gap: 8px; margin: 4px 0; }
+  #menu-rep .rrow span { width: 90px; }
+  #menu-rep .bar { height: 9px; }
+  #menu-rep .bar > div { background: linear-gradient(90deg, #7dff9b, #ffd23d); }
   #pause-overlay { display: none; }
-  #weapon-wheel { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
-    width: 300px; height: 300px; display: none; z-index: 8; pointer-events: none; }
-  .wheel-seg { position: absolute; width: 120px; height: 120px; border-radius: 50%;
-    background: rgba(8,14,22,0.8); border: 2px solid rgba(255,255,255,0.3);
-    display: flex; flex-direction: column; align-items: center; justify-content: center;
-    font-size: 13px; font-weight: 800; pointer-events: auto; cursor: pointer; text-align: center; }
-  .wheel-seg small { font-weight: 400; color: #ffd23e; }
-  .wheel-seg.selected { border-color: #ffd23e; background: rgba(255,210,62,0.25); }
-  .wheel-seg[data-idx="0"] { left: 90px; top: -10px; }
-  .wheel-seg[data-idx="1"] { left: -10px; top: 150px; }
-  .wheel-seg[data-idx="2"] { left: 190px; top: 150px; }
-  #wheel-center { position: absolute; left: 110px; top: 110px; width: 80px; height: 80px;
-    border-radius: 50%; background: rgba(8,14,22,0.85); border: 2px solid #ffd23e;
-    display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 800;
-    color: #ffd23e; text-align: center; }
-  #garage-panel { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
-    width: 460px; max-width: 92vw; background: rgba(10,16,28,0.95); border: 2px solid #ffd23e;
-    border-radius: 14px; padding: 20px; z-index: 9; display: none; }
-  #garage-panel h2 { color: #ffd23e; margin-bottom: 4px; }
-  #garage-money { color: #7dff8a; font-weight: 800; margin-bottom: 12px; }
-  .garage-row { display: flex; justify-content: space-between; align-items: center; gap: 10px;
-    padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.12); font-size: 14px; }
-  .garage-row button { background: #ffd23e; border: none; border-radius: 8px; padding: 7px 16px;
-    font-weight: 800; cursor: pointer; }
-  .garage-row button:disabled { background: #555; color: #bbb; cursor: default; }
-  #garage-paints { display: flex; gap: 8px; margin-top: 12px; }
-  .paint-swatch { width: 34px; height: 34px; border-radius: 50%; border: 3px solid transparent; cursor: pointer; }
-  .paint-swatch.selected { border-color: #fff; }
-  #btn-close-garage { margin-top: 16px; background: #ffd23e; border: none; border-radius: 8px;
-    padding: 10px 22px; font-weight: 800; cursor: pointer; }
+  #pause-overlay.on { display: flex; }
+  #menu-overlay { display: flex; }
+  #menu-overlay.off { display: none; }
+  .keys { font-size: 12px; color: #9fb4d8; margin-top: 12px; line-height: 1.7; }
 </style>
 <script type="importmap">
 { "imports": { "three": "./vendor/three.module.min.js" } }
@@ -95,58 +109,83 @@
 <div id="game-root"></div>
 
 <div id="hud">
-  <div id="hud-top-left" class="panel">
-    <div id="hud-money">$250</div>
-    <div class="bar-row"><span>NYAWA</span><div class="bar"><div id="hud-health-fill"></div></div></div>
-    <div class="bar-row"><span>ARMOR</span><div class="bar"><div id="hud-armor-fill"></div></div></div>
+  <div id="hud-topleft" class="panel">
+    <div id="hud-money">$500</div>
+    <div class="bar-row"><span>❤</span><div class="bar"><div id="hud-health-fill"></div></div><span id="hud-health-num">100</span></div>
+    <div class="bar-row"><span>🛡</span><div class="bar"><div id="hud-armor-fill"></div></div></div>
     <div id="hud-stars">☆☆☆☆☆</div>
+    <div id="hud-speed">0 <small>km/h</small></div>
+    <div id="hud-clock">🕔 17:00</div>
+    <div id="hud-radio">📻 Radio Cakrawala FM</div>
+    <div id="hud-relics">◆ Relik 0/20</div>
+    <div id="hud-district">Distrik: Pusat ★ 50</div>
   </div>
-  <div id="hud-top-right" class="panel">
-    <div id="hud-clock">10:00</div>
-    <div id="hud-radio">♪ Cakrawala FM</div>
-    <div id="hud-speed">0 km/h</div>
-    <div id="hud-compass">◀ N 0° ▶</div>
+  <div id="hud-topright">
+    <canvas id="hud-minimap" width="190" height="190"></canvas>
+    <div id="hud-compass">N ↑ 000°</div>
   </div>
-  <div id="hud-tracker" class="panel"><h3>★ MISI BU SARI ★</h3><div id="hud-tracker-list"></div></div>
-  <div id="hud-banner" class="panel"></div>
-  <canvas id="hud-minimap" width="190" height="190"></canvas>
-  <div id="hud-controls">WASD gerak • E interaksi • F serang<br>Q roda senjata • R radio • G garasi • Esc jeda</div>
-  <div id="hud-prompt">WASD — Jalan</div>
+  <div id="hud-tracker" class="panel">
+    <h3 id="hud-act-name">Babak 1 — Awal di Cakrawala</h3>
+    <ul id="hud-tracker-list"></ul>
+  </div>
+  <div id="hud-missionbar"></div>
+  <div id="hud-banner"></div>
+  <div id="hud-prompt"></div>
+  <div id="hud-hint">WASD jalan/mengemudi • E masuk mobil / bicara • F pukul/tembak • Q roda senjata • G garasi • R radio • H klakson • Spasi rem • Esc pause</div>
 </div>
 
 <div id="weapon-wheel">
-  <div class="wheel-seg" data-idx="0">👊<br>Tinju<br><small>[1] ∞</small></div>
-  <div class="wheel-seg" data-idx="1">🔫<br>Pistol<br><small>[2] ammo</small></div>
-  <div class="wheel-seg" data-idx="2">🔫<br>SMG<br><small>[3] ammo</small></div>
-  <div id="wheel-center">SENJATA</div>
+  <div class="wheel-seg" data-idx="0">1 — Tinju<small>tanpa amunisi</small></div>
+  <div class="wheel-seg" data-idx="1">2 — Pistol<small id="wheel-ammo1">60 peluru</small></div>
+  <div class="wheel-seg" data-idx="2">3 — SMG<small id="wheel-ammo2">90 peluru</small></div>
 </div>
 
 <div id="garage-panel">
   <h2>🔧 Garasi Bu Sari</h2>
-  <div id="garage-money">$250</div>
-  <div id="garage-list"></div>
-  <h3 style="margin-top:14px;color:#ffd23e;">Cat Mobil</h3>
+  <div id="garage-money">$500</div>
+  <div id="garage-discount" class="gsec"></div>
+  <h3 style="margin-top:8px">Kendaraan (10)</h3>
+  <ul id="garage-list"></ul>
+  <h3 style="margin-top:12px">Cat mobil (8 warna)</h3>
   <div id="garage-paints"></div>
-  <button id="btn-close-garage">TUTUP [G]</button>
+  <h3 style="margin-top:12px">Upgrade</h3>
+  <div class="gsec">
+    <button class="gbtn" id="btn-turbo">Mesin Turbo $400 (+30% top speed)</button>
+    <button class="gbtn" id="btn-armor-up">Lapis Baja $350</button>
+    <button class="gbtn" id="btn-nitro">Nitro $300 (boost Shift)</button>
+    <button class="gbtn" id="btn-ammo">Isi Amunisi $50</button>
+  </div>
+  <h3 style="margin-top:12px">Garasi (3)</h3>
+  <div class="gsec">🏠 Garasi Bengkel Bu Sari — dekat bengkel (-222, 252)<br>
+  🏠 Garasi Pelabuhan — dekat dermaga (250, 360)<br>
+  🏠 Garasi Menara — dekat menara (0, -30)<br>
+  Ikon G di minimap menandai ketiganya.</div>
+  <button class="gbtn" id="btn-close-garage" style="margin-top:14px">Tutup (G)</button>
 </div>
 
 <div id="menu-overlay" class="overlay">
-  <h1>KOTA CAKRAWALA</h1>
-  <h2>Open-world crime • Raka &amp; Bu Sari</h2>
-  <p>Kota pantai yang hidup: 100 gedung, lalu lintas, pejalan kaki, polisi,
-     helikopter, dan 8 misi Bu Sari senilai $3.950. Curi mobil, kabur dari
-     kejaran polisi, dan jadi legenda Cakrawala.</p>
-  <button id="btn-start">▶ MULAI MAIN</button>
-  <div id="menu-progress"></div>
-  <div class="keys">WASD jalan / mengemudi • E masuk mobil &amp; bicara • Spasi rem tangan<br>
-    F pukul / tembak • Q (tahan) roda senjata • R ganti radio • G garasi • Esc jeda</div>
+  <div class="card">
+    <h1>KOTA CAKRAWALA</h1>
+    <h2>Open-world crime • Kota fiktif pesisir Indonesia • Protagonis: Raka</h2>
+    <p>Raka baru pulang ke Kota Cakrawala. Bu Sari, pemilik bengkel di ujung kota,
+    menawarinya kerjaan: antar paket, balapan, sampai penyelamatan di dermaga.
+    Polisi mengawasi — jangan sampai Wanted naik ke ★★★★★.</p>
+    <div id="menu-progress">0/12 misi • Babak 1 • Relik 0/20 • $500</div>
+    <div id="menu-rep"></div>
+    <button id="btn-start">▶ MULAI</button>
+    <div class="keys">WASD jalan &amp; mengemudi • E masuk/keluar mobil, bicara Bu Sari • F pukul/tembak<br>
+    Q / Tab roda senjata • G garasi • R ganti radio • H klakson • Spasi rem tangan • Esc pause<br>
+    12 misi Bu Sari • 20 Relik Cakrawala • 10 mobil • 3 garasi • 5 distrik</div>
+  </div>
 </div>
 
 <div id="pause-overlay" class="overlay">
-  <h1 style="font-size:44px;">JEDA</h1>
-  <p>Game dijeda. Progres tersimpan otomatis.</p>
-  <button id="btn-resume">▶ LANJUTKAN</button>
-  <button id="btn-restart" style="background:linear-gradient(180deg,#8fa8c8,#5a7ba8);color:#fff;">↺ MULAI ULANG</button>
+  <div class="card">
+    <h1 style="font-size:40px">JEDA</h1>
+    <p>Game dijeda. Progres tersimpan otomatis.</p>
+    <button id="btn-resume">▶ LANJUTKAN</button><br>
+    <button id="btn-restart">↺ MULAI DARI AWAL</button>
+  </div>
 </div>
 
 <script type="module" src="./src/main.js"></script>

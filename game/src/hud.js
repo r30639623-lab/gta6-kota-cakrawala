@@ -1,162 +1,213 @@
-// hud.js — every HUD element: money, health + armor bars, wanted stars,
-// speed, game clock, radio station, 8-mission tracker, minimap with
-// labels, compass, mission banner and the contextual prompt.
-import { MISSIONS } from './missions.js';
+// hud.js — HUD kaya: uang, nyawa, armor, Wanted, kecepatan, jam,
+// radio, tracker 12 misi, counter relik, distrik, minimap + kompas.
+import { MISSIONS, ACT_NAMES } from './missions.js';
 
-export function createHud(doc, save) {
-  const $ = (id) => doc.getElementById(id);
-  const els = {
-    money: $('hud-money'),
-    health: $('hud-health-fill'),
-    armor: $('hud-armor-fill'),
-    stars: $('hud-stars'),
-    speed: $('hud-speed'),
-    clock: $('hud-clock'),
-    radio: $('hud-radio'),
-    tracker: $('hud-tracker-list'),
-    banner: $('hud-banner'),
-    prompt: $('hud-prompt'),
-    minimap: $('hud-minimap'),
-    compass: $('hud-compass'),
-    wheel: $('weapon-wheel'),
-    garage: $('garage-panel'),
-    garageMoney: $('garage-money'),
-  };
-  const mapCtx = els.minimap ? els.minimap.getContext('2d') : null;
+const WORLD = { minX: -310, maxX: 345, minZ: -310, maxZ: 345 };
+
+function toMap(x, z, size) {
+  const px = ((x - WORLD.minX) / (WORLD.maxX - WORLD.minX)) * size;
+  const pz = ((z - WORLD.minZ) / (WORLD.maxZ - WORLD.minZ)) * size;
+  return [px, pz];
+}
+
+export function createHud() {
+  const el = (id) => document.getElementById(id);
+  const moneyEl = el('hud-money');
+  const healthFill = el('hud-health-fill');
+  const healthNum = el('hud-health-num');
+  const armorFill = el('hud-armor-fill');
+  const starsEl = el('hud-stars');
+  const speedEl = el('hud-speed');
+  const clockEl = el('hud-clock');
+  const radioEl = el('hud-radio');
+  const relicsEl = el('hud-relics');
+  const districtEl = el('hud-district');
+  const trackerEl = el('hud-tracker-list');
+  const actEl = el('hud-act-name');
+  const bannerEl = el('hud-banner');
+  const missionBarEl = el('hud-missionbar');
+  const promptEl = el('hud-prompt');
+  const compassEl = el('hud-compass');
+  const mapCanvas = el('hud-minimap');
+  const mapCtx = mapCanvas.getContext('2d');
+  const menuProgress = el('menu-progress');
+  const menuRep = el('menu-rep');
+
   let bannerTimer = 0;
 
-  function renderTracker(activeId) {
-    if (!els.tracker) return;
-    els.tracker.innerHTML = '';
-    for (const m of MISSIONS) {
-      const done = save.missionsDone.includes(m.id);
-      const row = doc.createElement('div');
-      row.className = 'tracker-row' + (done ? ' done' : '') + (m.id === activeId ? ' active' : '');
-      row.textContent = `${done ? '✓' : (m.id === activeId ? '►' : '○')} ${m.name} — $${m.reward}`;
-      els.tracker.appendChild(row);
-    }
+  function showBanner(text, seconds = 3.5) {
+    bannerEl.textContent = text;
+    bannerEl.style.display = 'block';
+    bannerTimer = seconds;
   }
 
-  function drawMinimap(playerPos, heading, cars, policeCars, heli, missionTarget, landmarks) {
-    if (!mapCtx) return;
-    const W = 190;
-    const H = 190;
-    mapCtx.clearRect(0, 0, W, H);
-    mapCtx.fillStyle = 'rgba(12, 20, 14, 0.82)';
-    mapCtx.fillRect(0, 0, W, H);
-    const toMap = (x, z) => [((x + 320) / 640) * W, ((z + 320) / 640) * H];
-    // Sea + beach.
+  function drawMinimap(snap) {
+    const S = 190;
+    mapCtx.clearRect(0, 0, S, S);
+    mapCtx.fillStyle = '#16283d';
+    mapCtx.fillRect(0, 0, S, S);
+    // Laut & pantai (selatan)
     mapCtx.fillStyle = '#1e6f9e';
-    mapCtx.fillRect(0, ((320 + 320) / 640) * H, W, H - ((320 + 320) / 640) * H);
-    mapCtx.fillStyle = '#d9c28f';
-    mapCtx.fillRect(0, ((300 + 320) / 640) * H, W, 6);
-    // Roads.
-    mapCtx.strokeStyle = '#5a6270';
-    mapCtx.lineWidth = 2;
-    for (const c of [-270, -210, -150, -90, -30, 30, 90, 150, 210, 270]) {
-      const [ax] = toMap(c, 0);
-      const [, az] = toMap(0, c);
-      mapCtx.beginPath(); mapCtx.moveTo(ax, 0); mapCtx.lineTo(ax, H); mapCtx.stroke();
-      mapCtx.beginPath(); mapCtx.moveTo(0, az); mapCtx.lineTo(W, az); mapCtx.stroke();
+    const [, seaY] = toMap(0, 345, S);
+    mapCtx.fillRect(0, toMap(0, 300, S)[1], S, S);
+    mapCtx.fillStyle = '#e8d49a';
+    mapCtx.fillRect(0, toMap(0, 295, S)[1], S, 6);
+    // Jalan grid
+    mapCtx.strokeStyle = '#3a4552';
+    mapCtx.lineWidth = 4;
+    for (let gx = -240; gx <= 320; gx += 80) {
+      const [px] = toMap(gx, 0, S);
+      mapCtx.beginPath(); mapCtx.moveTo(px, 0); mapCtx.lineTo(px, S); mapCtx.stroke();
     }
-    // Landmark labels.
-    mapCtx.font = 'bold 9px sans-serif';
-    mapCtx.fillStyle = '#ffd23e';
-    for (const [key, label] of [['menara', 'Menara'], ['pasar', 'Pasar'], ['rs', 'RS'], ['pantai', 'Pantai'], ['dermaga', 'Dermaga']]) {
-      const p = landmarks[key];
-      if (!p) continue;
-      const [mx, my] = toMap(p.x, p.z);
-      mapCtx.fillText(label, mx + 4, my - 4);
-      mapCtx.fillStyle = '#ff5a5a';
-      mapCtx.fillRect(mx - 2, my - 2, 4, 4);
-      mapCtx.fillStyle = '#ffd23e';
+    for (let gz = -240; gz <= 280; gz += 80) {
+      const [, pz] = toMap(0, gz, S);
+      mapCtx.beginPath(); mapCtx.moveTo(0, pz); mapCtx.lineTo(S, pz); mapCtx.stroke();
     }
-    // Mission beacon.
-    if (missionTarget) {
-      const [mx, my] = toMap(missionTarget.x, missionTarget.z);
-      mapCtx.fillStyle = '#ffd23e';
+    // Label distrik
+    mapCtx.font = 'bold 10px Arial';
+    mapCtx.fillStyle = 'rgba(255,255,255,0.55)';
+    const districtLabels = [
+      ['Pusat', 0, -30], ['Pasar', -120, 60], ['Pelabuhan', 250, 360],
+      ['Pantai', 0, 318], ['Bengkel', -222, 252],
+    ];
+    for (const [name, x, z] of districtLabels) {
+      const [px, pz] = toMap(x, z, S);
+      mapCtx.fillText(name, px - 14, pz - 12);
+    }
+    // Landmark
+    const marks = [
+      ['▲ Menara', snap.landmarks.menara, '#ffd23d'],
+      ['■ Pasar', snap.landmarks.pasar, '#ff8ac2'],
+      ['✚ RS', snap.landmarks.rs, '#ffffff'],
+      ['⚒ Bengkel', snap.landmarks.bengkel, '#7dff9b'],
+      ['⚓ Dermaga', snap.landmarks.dermaga, '#7fb0ff'],
+    ];
+    mapCtx.font = '10px Arial';
+    for (const [label, lm, color] of marks) {
+      const [px, pz] = toMap(lm.x, lm.z, S);
+      mapCtx.fillStyle = color;
+      mapCtx.beginPath(); mapCtx.arc(px, pz, 4, 0, Math.PI * 2); mapCtx.fill();
+      mapCtx.fillText(label, px + 6, pz + 3);
+    }
+    // Garasi (G)
+    if (snap.garages) {
+      for (const g of snap.garages) {
+        const [px, pz] = toMap(g.x, g.z, S);
+        mapCtx.fillStyle = '#7dff9b';
+        mapCtx.font = 'bold 11px Arial';
+        mapCtx.fillText('G', px - 3, pz + 4);
+      }
+    }
+    // Relik yang belum diambil
+    if (snap.relicPositions) {
+      mapCtx.fillStyle = '#ffd23d';
+      for (const r of snap.relicPositions) {
+        const [px, pz] = toMap(r.x, r.z, S);
+        mapCtx.beginPath(); mapCtx.arc(px, pz, 1.8, 0, Math.PI * 2); mapCtx.fill();
+      }
+    }
+    // Target misi
+    if (snap.missionTarget) {
+      const [px, pz] = toMap(snap.missionTarget.x, snap.missionTarget.z, S);
+      mapCtx.strokeStyle = '#ffd23d';
+      mapCtx.lineWidth = 2;
+      mapCtx.beginPath(); mapCtx.arc(px, pz, 8, 0, Math.PI * 2); mapCtx.stroke();
+      mapCtx.fillStyle = '#ffd23d';
+      mapCtx.beginPath(); mapCtx.arc(px, pz, 3, 0, Math.PI * 2); mapCtx.fill();
+    }
+    // Mobil lalu lintas (abu-abu), polisi (biru), heli (merah)
+    if (snap.trafficCars) {
+      mapCtx.fillStyle = '#9aa5b1';
+      for (const c of snap.trafficCars) {
+        const [px, pz] = toMap(c.pos.x, c.pos.z, S);
+        mapCtx.fillRect(px - 1.5, pz - 1.5, 3, 3);
+      }
+    }
+    if (snap.policeCars) {
+      mapCtx.fillStyle = '#3d7bff';
+      for (const c of snap.policeCars) {
+        if (!c.active) continue;
+        const [px, pz] = toMap(c.pos.x, c.pos.z, S);
+        mapCtx.beginPath(); mapCtx.arc(px, pz, 3.5, 0, Math.PI * 2); mapCtx.fill();
+      }
+    }
+    if (snap.heli && snap.heli.visible) {
+      const [px, pz] = toMap(snap.heli.position.x, snap.heli.position.z, S);
+      mapCtx.fillStyle = '#ff3b30';
+      mapCtx.font = 'bold 12px Arial';
+      mapCtx.fillText('H', px - 4, pz + 4);
+    }
+    // Pemain (panah kuning)
+    if (snap.playerPos) {
+      const [px, pz] = toMap(snap.playerPos.x, snap.playerPos.z, S);
+      mapCtx.save();
+      mapCtx.translate(px, pz);
+      mapCtx.rotate(Math.PI - (snap.heading || 0));
+      mapCtx.fillStyle = '#ffd23d';
       mapCtx.beginPath();
-      mapCtx.arc(mx, my, 6 + Math.sin(performance.now() * 0.005) * 2, 0, Math.PI * 2);
+      mapCtx.moveTo(0, -7); mapCtx.lineTo(5, 5); mapCtx.lineTo(-5, 5); mapCtx.closePath();
       mapCtx.fill();
+      mapCtx.restore();
     }
-    // Police + heli.
-    mapCtx.fillStyle = '#3aa0ff';
-    for (const c of policeCars) {
-      const [mx, my] = toMap(c.pos.x, c.pos.z);
-      mapCtx.fillRect(mx - 2, my - 2, 4, 4);
-    }
-    if (heli && heli.visible) {
-      const [mx, my] = toMap(heli.position.x, heli.position.z);
-      mapCtx.fillStyle = '#ff2222';
-      mapCtx.beginPath();
-      mapCtx.arc(mx, my, 5, 0, Math.PI * 2);
-      mapCtx.fill();
-    }
-    // Traffic dots.
-    mapCtx.fillStyle = '#e8e8e8';
-    for (const c of cars) {
-      const [mx, my] = toMap(c.pos.x, c.pos.z);
-      mapCtx.fillRect(mx - 1, my - 1, 2, 2);
-    }
-    // Player arrow.
-    const [px, py] = toMap(playerPos.x, playerPos.z);
-    mapCtx.save();
-    mapCtx.translate(px, py);
-    mapCtx.rotate(Math.atan2(Math.sin(heading), Math.cos(heading)) + Math.PI / 2);
-    mapCtx.fillStyle = '#22ff66';
-    mapCtx.beginPath();
-    mapCtx.moveTo(0, -7);
-    mapCtx.lineTo(5, 6);
-    mapCtx.lineTo(-5, 6);
-    mapCtx.closePath();
-    mapCtx.fill();
-    mapCtx.restore();
   }
 
   return {
-    renderTracker,
-    setPrompt(text) {
-      if (els.prompt && els.prompt.textContent !== text) els.prompt.textContent = text;
-    },
-    showBanner(text, seconds = 4) {
-      if (!els.banner) return;
-      els.banner.textContent = text;
-      els.banner.style.opacity = '1';
-      bannerTimer = seconds;
-    },
+    showBanner,
     update(dt, snap) {
       if (bannerTimer > 0) {
         bannerTimer -= dt;
-        if (bannerTimer <= 0 && els.banner) els.banner.style.opacity = '0';
+        if (bannerTimer <= 0) bannerEl.style.display = 'none';
       }
-      if (els.money) els.money.textContent = `$${snap.money}`;
-      if (els.health) els.health.style.width = `${Math.max(0, snap.health)}%`;
-      if (els.armor) els.armor.style.width = `${Math.max(0, snap.armor)}%`;
-      if (els.stars) {
-        els.stars.textContent = '★'.repeat(snap.wanted) + '☆'.repeat(Math.max(0, 5 - snap.wanted));
-        els.stars.style.color = snap.wanted > 0 ? '#ff4444' : '#888888';
+      moneyEl.textContent = `$${snap.money}`;
+      healthFill.style.width = `${Math.max(0, snap.health)}%`;
+      healthNum.textContent = `${Math.round(snap.health)}`;
+      armorFill.style.width = `${Math.max(0, snap.armor)}%`;
+      const filled = '★'.repeat(snap.wanted) + '☆'.repeat(5 - snap.wanted);
+      starsEl.textContent = filled;
+      starsEl.classList.toggle('hot', snap.wanted > 0);
+      speedEl.innerHTML = `${Math.round(snap.speedKmh)} <small>km/h</small>`;
+      clockEl.textContent = `🕔 ${snap.clockText}`;
+      radioEl.textContent = `📻 ${snap.radioStation}`;
+      relicsEl.textContent = `◆ Relik ${snap.relicsFound}/${snap.relicsTotal}`;
+      districtEl.textContent = `Distrik: ${snap.districtName} ★ ${snap.districtRep}`;
+      const act = snap.currentAct || 1;
+      actEl.textContent = ACT_NAMES[act] || ACT_NAMES[1];
+      // Tracker 12 misi
+      let html = '';
+      for (const m of MISSIONS) {
+        const done = snap.missionsDone.includes(m.id);
+        const active = snap.missionActiveId === m.id;
+        const mark = done ? '✓' : active ? '►' : '○';
+        const cls = done ? 'done' : active ? 'active' : '';
+        html += `<li class="${cls}">${mark} ${m.name} — $${m.reward}</li>`;
       }
-      if (els.speed) els.speed.textContent = `${Math.round(Math.abs(snap.speedKmh))} km/h`;
-      if (els.clock) els.clock.textContent = snap.clockText;
-      if (els.radio) els.radio.textContent = `♪ ${snap.radioStation}`;
-      if (els.compass) {
-        const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
-        const deg = ((snap.headingDeg % 360) + 360) % 360;
-        els.compass.textContent = `◀ ${dirs[Math.round(deg / 45) % 8]} ${Math.round(deg)}° ▶`;
+      trackerEl.innerHTML = html;
+      if (snap.missionActive) {
+        missionBarEl.style.display = 'block';
+        missionBarEl.textContent = `🎯 ${snap.missionActive.def.name} — ${Math.ceil(snap.missionTimer)} dtk • $${snap.missionActive.def.reward}`;
+      } else {
+        missionBarEl.style.display = 'none';
       }
-      drawMinimap(snap.playerPos, snap.heading, snap.trafficCars, snap.policeCars, snap.heli, snap.missionTarget, snap.landmarks);
+      if (snap.prompt) {
+        promptEl.style.display = 'block';
+        promptEl.textContent = snap.prompt;
+      } else {
+        promptEl.style.display = 'none';
+      }
+      const deg = ((snap.headingDeg || 0) % 360 + 360) % 360;
+      const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+      const dirName = dirs[Math.round(deg / 45) % 8];
+      compassEl.textContent = `${dirName} ↑ ${String(Math.round(deg)).padStart(3, '0')}°`;
+      drawMinimap(snap);
+      // Menu
+      menuProgress.textContent = `${snap.missionsDone.length}/12 misi • Babak ${act} • Relik ${snap.relicsFound}/${snap.relicsTotal} • $${snap.money}`;
+      if (snap.districtList) {
+        let repHtml = '';
+        for (const d of snap.districtList) {
+          repHtml += `<div class="rrow"><span>${d.name}</span><div class="bar"><div style="width:${d.rep}%"></div></div><b>${d.rep}</b></div>`;
+        }
+        menuRep.innerHTML = repHtml;
+      }
     },
-    showWheel(show) { if (els.wheel) els.wheel.style.display = show ? 'flex' : 'none'; },
-    markWheel(selected) {
-      if (!els.wheel) return;
-      for (const seg of els.wheel.querySelectorAll('.wheel-seg')) {
-        seg.classList.toggle('selected', Number(seg.dataset.idx) === selected);
-      }
-    },
-    showGarage(show, money) {
-      if (els.garage) els.garage.style.display = show ? 'block' : 'none';
-      if (show && els.garageMoney) els.garageMoney.textContent = `$${money}`;
-    },
-    setGarageMoney(money) { if (els.garageMoney) els.garageMoney.textContent = `$${money}`; },
   };
 }

@@ -1,116 +1,93 @@
-// Static dev server buat game Kota Cakrawala — Round 5 rewrite.
-// Ditulis ulang dari nol pada 2026-11-20 (Round 5) — revisi kedua file ini.
-// Melayani folder game/ di sebelah file ini, stdlib Node saja.
+// Kota Cakrawala — Round 6 rebuild (2026-11-20).
+// Static file server for game/ (Node 22 stdlib only, no dependencies).
+// Usage: node serve.ts [--port 8080]
+//   --port abc, or a port outside 1..65535, falls back to 8080.
+// Serves / as game/index.html, files under game/ with correct MIME
+// types, 403 on path traversal, 404 on missing files, 400 on bad URIs.
+import { createServer } from 'node:http';
+import { readFile, stat } from 'node:fs/promises';
+import { join, resolve, extname, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-import { createServer } from "node:http";
-import { readFile, stat } from "node:fs/promises";
-import { join, resolve, extname, sep } from "node:path";
-import { fileURLToPath } from "node:url";
+const ROOT = resolve(join(fileURLToPath(new URL('.', import.meta.url)), 'game'));
 
-const here = fileURLToPath(new URL(".", import.meta.url));
-const gameDir = resolve(here, "game");
+const MIME = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.mjs': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.svg': 'image/svg+xml',
+  '.ico': 'image/x-icon',
+  '.txt': 'text/plain; charset=utf-8',
+  '.wasm': 'application/wasm',
+};
 
 function pickPort(argv) {
-  const at = argv.indexOf("--port");
-  if (at === -1 || at + 1 >= argv.length) return 8080;
-  const n = Number.parseInt(argv[at + 1], 10);
-  if (!Number.isFinite(n) || n < 1 || n > 65535) return 8080;
+  const idx = argv.indexOf('--port');
+  if (idx === -1) return 8080;
+  const n = Number(argv[idx + 1]);
+  if (!Number.isInteger(n) || n < 1 || n > 65535) return 8080;
   return n;
 }
 
 const port = pickPort(process.argv.slice(2));
 
-const mimeByExt = {
-  ".html": "text/html; charset=utf-8",
-  ".js": "text/javascript; charset=utf-8",
-  ".mjs": "text/javascript; charset=utf-8",
-  ".css": "text/css; charset=utf-8",
-  ".json": "application/json; charset=utf-8",
-  ".png": "image/png",
-  ".jpg": "image/jpeg",
-  ".jpeg": "image/jpeg",
-  ".gif": "image/gif",
-  ".webp": "image/webp",
-  ".svg": "image/svg+xml",
-  ".ico": "image/x-icon",
-  ".woff2": "font/woff2",
-  ".glb": "model/gltf-binary",
-  ".gltf": "model/gltf+json",
-  ".bin": "application/octet-stream",
-  ".wasm": "application/wasm",
-  ".wav": "audio/wav",
-  ".mp3": "audio/mpeg",
-  ".ogg": "audio/ogg",
-  ".txt": "text/plain; charset=utf-8",
-  ".avif": "image/avif",
-};
-
-function mimeFor(filePath) {
-  return mimeByExt[extname(filePath).toLowerCase()] ?? "application/octet-stream";
-}
-
-function note(req, code) {
-  console.log(`${req.method} ${req.url} -> ${code}`);
-}
-
-function send(res, req, code, body, type) {
-  const payload = body ?? Buffer.alloc(0);
-  res.writeHead(code, {
-    "content-type": type ?? "text/plain; charset=utf-8",
-    "content-length": payload.length,
-    "cache-control": "no-store",
-  });
-  res.end(payload);
-  note(req, code);
-}
-
 const server = createServer(async (req, res) => {
-  // Pakai raw path apa adanya (tanpa new URL) supaya segmen ".."
-  // tidak dinormalisasi duluan — path.resolve di bawah yang menilai.
-  const rawPath = (req.url ?? "/").split("?")[0];
-  if (!rawPath.startsWith("/")) {
-    send(res, req, 400, Buffer.from("bad request"));
-    return;
-  }
-
-  let decoded;
+  const stamp = new Date().toISOString();
   try {
-    decoded = decodeURIComponent(rawPath);
-  } catch {
-    send(res, req, 400, Buffer.from("bad uri"));
-    return;
+    const raw = req.url || '/';
+    const pathOnly = raw.split('?')[0].split('#')[0];
+    let decoded;
+    try {
+      decoded = decodeURIComponent(pathOnly);
+    } catch {
+      res.writeHead(400, { 'content-type': 'text/plain' });
+      res.end('400 bad request\n');
+      console.log(`[${stamp}] ${req.method} ${raw} -> 400`);
+      return;
+    }
+    if (decoded.includes('..')) {
+      res.writeHead(403, { 'content-type': 'text/plain' });
+      res.end('403 forbidden\n');
+      console.log(`[${stamp}] ${req.method} ${raw} -> 403`);
+      return;
+    }
+    const rel = decoded === '/' ? 'index.html' : decoded.replace(/^\/+/, '');
+    const file = resolve(join(ROOT, rel));
+    if (file !== ROOT && !file.startsWith(ROOT + sep)) {
+      res.writeHead(403, { 'content-type': 'text/plain' });
+      res.end('403 forbidden\n');
+      console.log(`[${stamp}] ${req.method} ${raw} -> 403`);
+      return;
+    }
+    let info;
+    try {
+      info = await stat(file);
+    } catch {
+      info = null;
+    }
+    if (!info || !info.isFile()) {
+      res.writeHead(404, { 'content-type': 'text/plain' });
+      res.end('404 not found\n');
+      console.log(`[${stamp}] ${req.method} ${raw} -> 404`);
+      return;
+    }
+    const body = await readFile(file);
+    const type = MIME[extname(file).toLowerCase()] || 'application/octet-stream';
+    res.writeHead(200, { 'content-type': type, 'content-length': body.length });
+    res.end(body);
+    console.log(`[${stamp}] ${req.method} ${raw} -> 200 ${body.length}B`);
+  } catch (err) {
+    res.writeHead(500, { 'content-type': 'text/plain' });
+    res.end('500 internal error\n');
+    console.log(`[${stamp}] ${req.method} ${req.url} -> 500 ${err.message}`);
   }
-
-  let target = decoded;
-  if (target === "/" || target.endsWith("/")) target += "index.html";
-
-  const resolved = resolve(gameDir, `.${sep}${target}`);
-  const inside = resolved === gameDir || resolved.startsWith(gameDir + sep);
-  if (!inside) {
-    send(res, req, 403, Buffer.from("forbidden"));
-    return;
-  }
-
-  let finalPath = resolved;
-  try {
-    const info = await stat(finalPath);
-    if (info.isDirectory()) finalPath = join(finalPath, "index.html");
-  } catch {
-    send(res, req, 404, Buffer.from("not found"));
-    return;
-  }
-
-  let data;
-  try {
-    data = await readFile(finalPath);
-  } catch {
-    send(res, req, 404, Buffer.from("not found"));
-    return;
-  }
-
-  send(res, req, 200, data, mimeFor(finalPath));
 });
 
-server.listen(port, "127.0.0.1", () => {
-  console.log(`game/ is on http://localhost:${port}`);
+server.listen(port, () => {
+  console.log(`Kota Cakrawala server on http://localhost:${port} (serving game/)`);
 });

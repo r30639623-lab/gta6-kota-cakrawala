@@ -1,37 +1,51 @@
-// save.js — localStorage persistence for Kota Cakrawala.
-// Saves money, finished missions, garage upgrades, paint and ammo.
-const KEY = 'kota-cakrawala-save-v3';
+// save.js — Save/load localStorage, key v4 (round 6).
+export const SAVE_KEY = 'kota-cakrawala-save-v4';
 
 export function defaultSave() {
   return {
-    money: 250,
+    money: 500,
+    health: 100,
+    armor: 0,
     missionsDone: [],
-    upgrades: { turbo: false, armor: false, nitro: false },
-    paint: 0,
-    ammo: { pistol: 24, smg: 60 },
+    relicsFound: [],
+    rep: { pusat: 50, pasar: 50, pelabuhan: 50, pantai: 50, bengkel: 50 },
+    ownedCars: ['kancil'],
+    activeCarId: 'kancil',
+    paintIndex: 0,
+    upgrades: { turbo: false, armorUp: false, nitro: false },
+    ammo: { pistol: 60, smg: 90 },
+    weapon: 0,
+    radioStation: 0,
+    allRelicsBonus: false,
+    legendBonus: false,
   };
 }
 
 export function loadSave() {
   try {
-    const raw = window.localStorage.getItem(KEY);
+    const raw = localStorage.getItem(SAVE_KEY);
     if (!raw) return defaultSave();
-    const data = JSON.parse(raw);
+    const parsed = JSON.parse(raw);
     const base = defaultSave();
-    return {
-      money: typeof data.money === 'number' ? data.money : base.money,
-      missionsDone: Array.isArray(data.missionsDone) ? data.missionsDone : [],
-      upgrades: { ...base.upgrades, ...(data.upgrades || {}) },
-      paint: typeof data.paint === 'number' ? data.paint : 0,
-      ammo: { ...base.ammo, ...(data.ammo || {}) },
-    };
-  } catch (err) {
+    const merged = { ...base, ...parsed };
+    merged.rep = { ...base.rep, ...(parsed.rep || {}) };
+    merged.upgrades = { ...base.upgrades, ...(parsed.upgrades || {}) };
+    merged.ammo = { ...base.ammo, ...(parsed.ammo || {}) };
+    if (!Array.isArray(merged.missionsDone)) merged.missionsDone = [];
+    if (!Array.isArray(merged.relicsFound)) merged.relicsFound = [];
+    if (!Array.isArray(merged.ownedCars) || merged.ownedCars.length === 0) merged.ownedCars = ['kancil'];
+    return merged;
+  } catch {
     return defaultSave();
   }
 }
 
-export function writeSave(data) {
+export function storeSave(save) {
   try {
-    window.localStorage.setItem(KEY, JSON.stringify(data));
-  } catch (err) { /* storage may be unavailable; game keeps running */ }
+    localStorage.setItem(SAVE_KEY, JSON.stringify(save));
+  } catch { /* storage penuh / privat: abaikan */ }
+}
+
+export function clearSave() {
+  try { localStorage.removeItem(SAVE_KEY); } catch { /* abaikan */ }
 }

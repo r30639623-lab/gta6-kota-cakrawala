@@ -1,56 +1,38 @@
-// audio.js — all sound in Kota Cakrawala is procedural WebAudio:
-// engine hum, sirens, crashes, gunshots and radio music. No audio files.
+// audio.js — Efek suara prosedural WebAudio (tanpa file audio).
+// Semua method aman dipanggil sebelum AudioContext dibuat (no-op).
 export function createAudio() {
   let ctx = null;
   let engineOsc = null;
   let engineGain = null;
-  let sirenOsc = null;
-  let sirenGain = null;
-  let sirenTimer = 0;
-  let sirenHigh = false;
+  let sirenTimer = null;
+  let sirenOn = false;
 
   function ensure() {
-    if (ctx) return ctx;
-    try {
-      const AC = window.AudioContext || window.webkitAudioContext;
-      ctx = new AC();
-      engineOsc = ctx.createOscillator();
-      engineOsc.type = 'sawtooth';
-      engineOsc.frequency.value = 55;
-      engineGain = ctx.createGain();
-      engineGain.gain.value = 0;
-      const lp = ctx.createBiquadFilter();
-      lp.type = 'lowpass';
-      lp.frequency.value = 420;
-      engineOsc.connect(lp).connect(engineGain).connect(ctx.destination);
-      engineOsc.start();
-      sirenOsc = ctx.createOscillator();
-      sirenOsc.type = 'triangle';
-      sirenOsc.frequency.value = 700;
-      sirenGain = ctx.createGain();
-      sirenGain.gain.value = 0;
-      sirenOsc.connect(sirenGain).connect(ctx.destination);
-      sirenOsc.start();
-    } catch (err) {
-      ctx = null;
+    if (!ctx) {
+      try {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return false;
+        ctx = new AC();
+      } catch { return false; }
     }
-    return ctx;
+    if (ctx && ctx.state === 'suspended') ctx.resume().catch(() => {});
+    return !!ctx;
   }
 
-  function tone(freq, dur, type, vol, when = 0) {
+  function blip(freq, dur, type, vol, when = 0) {
     if (!ensure()) return;
     try {
-      const t0 = ctx.currentTime + when;
+      const t = ctx.currentTime + when;
       const o = ctx.createOscillator();
       const g = ctx.createGain();
       o.type = type || 'sine';
-      o.frequency.setValueAtTime(freq, t0);
-      g.gain.setValueAtTime(vol || 0.12, t0);
-      g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+      o.frequency.setValueAtTime(freq, t);
+      g.gain.setValueAtTime(vol || 0.12, t);
+      g.gain.exponentialRampToValueAtTime(0.001, t + dur);
       o.connect(g).connect(ctx.destination);
-      o.start(t0);
-      o.stop(t0 + dur + 0.02);
-    } catch (err) { /* audio is best-effort */ }
+      o.start(t);
+      o.stop(t + dur + 0.02);
+    } catch { /* abaikan */ }
   }
 
   function noiseBurst(dur, vol) {
@@ -66,42 +48,57 @@ export function createAudio() {
       g.gain.value = vol || 0.2;
       src.connect(g).connect(ctx.destination);
       src.start();
-    } catch (err) { /* ignore */ }
+    } catch { /* abaikan */ }
   }
 
   return {
-    unlock() { ensure(); if (ctx && ctx.state === 'suspended') ctx.resume(); },
+    ensure,
+    cash() { blip(880, 0.12, 'sine', 0.15); blip(1320, 0.18, 'sine', 0.15, 0.09); blip(1760, 0.22, 'sine', 0.12, 0.18); },
+    crash() { noiseBurst(0.25, 0.3); blip(90, 0.2, 'square', 0.12); },
+    fail() { blip(220, 0.25, 'sawtooth', 0.12); blip(165, 0.35, 'sawtooth', 0.12, 0.2); },
+    success() { blip(523, 0.14, 'triangle', 0.15); blip(659, 0.14, 'triangle', 0.15, 0.12); blip(784, 0.28, 'triangle', 0.16, 0.24); },
+    horn() { blip(370, 0.18, 'square', 0.1); blip(466, 0.18, 'square', 0.08); },
+    shot() { noiseBurst(0.08, 0.25); blip(140, 0.08, 'square', 0.12); },
+    punch() { noiseBurst(0.1, 0.2); blip(120, 0.1, 'sine', 0.15); },
+    click() { blip(600, 0.05, 'square', 0.07); },
+    engineStart() {
+      if (!ensure()) return;
+      try {
+        if (engineOsc) return;
+        engineOsc = ctx.createOscillator();
+        engineGain = ctx.createGain();
+        engineOsc.type = 'sawtooth';
+        engineOsc.frequency.value = 55;
+        engineGain.gain.value = 0.0;
+        const filt = ctx.createBiquadFilter();
+        filt.type = 'lowpass';
+        filt.frequency.value = 420;
+        engineOsc.connect(filt).connect(engineGain).connect(ctx.destination);
+        engineOsc.start();
+      } catch { /* abaikan */ }
+    },
     engine(speedNorm, driving) {
-      if (!ensure()) return;
+      if (!engineOsc || !engineGain) return;
       try {
-        const target = driving ? 0.05 + speedNorm * 0.09 : 0.0;
-        engineGain.gain.setTargetAtTime(target, ctx.currentTime, 0.08);
-        engineOsc.frequency.setTargetAtTime(52 + speedNorm * 165, ctx.currentTime, 0.1);
-      } catch (err) { /* ignore */ }
+        const target = driving ? 0.03 + speedNorm * 0.05 : 0.0;
+        engineGain.gain.setTargetAtTime(target, ctx.currentTime, 0.1);
+        engineOsc.frequency.setTargetAtTime(55 + speedNorm * 160, ctx.currentTime, 0.1);
+      } catch { /* abaikan */ }
     },
-    siren(on, dt) {
-      if (!ensure()) return;
-      try {
-        sirenGain.gain.setTargetAtTime(on ? 0.035 : 0, ctx.currentTime, 0.1);
-        if (on) {
-          sirenTimer += dt;
-          if (sirenTimer > 0.45) {
-            sirenTimer = 0;
-            sirenHigh = !sirenHigh;
-            sirenOsc.frequency.setTargetAtTime(sirenHigh ? 950 : 660, ctx.currentTime, 0.05);
-          }
-        }
-      } catch (err) { /* ignore */ }
+    engineStop() {
+      if (engineOsc) { try { engineOsc.stop(); } catch { /* abaikan */ } engineOsc = null; engineGain = null; }
     },
-    beep() { tone(880, 0.12, 'sine', 0.12); tone(1320, 0.1, 'sine', 0.08, 0.1); },
-    cash() { tone(1046, 0.1, 'triangle', 0.14); tone(1318, 0.12, 'triangle', 0.14, 0.09); tone(1568, 0.2, 'triangle', 0.14, 0.18); },
-    crash(hard) { noiseBurst(hard ? 0.35 : 0.15, hard ? 0.35 : 0.15); tone(70, 0.25, 'sine', 0.25); },
-    punch() { noiseBurst(0.08, 0.2); },
-    gunshot(big) { noiseBurst(big ? 0.22 : 0.12, big ? 0.3 : 0.22); tone(big ? 140 : 190, 0.1, 'square', 0.12); },
-    horn() { tone(370, 0.35, 'square', 0.07); tone(466, 0.35, 'square', 0.05); },
-    click() { tone(1200, 0.05, 'square', 0.06); },
-    missionStart() { tone(523, 0.15, 'triangle', 0.14); tone(659, 0.15, 'triangle', 0.14, 0.12); tone(784, 0.3, 'triangle', 0.14, 0.24); },
-    fail() { tone(392, 0.2, 'sawtooth', 0.1); tone(311, 0.35, 'sawtooth', 0.1, 0.18); },
-    note(freq, dur, type, vol, when) { tone(freq, dur, type, vol, when); },
+    siren(on) {
+      if (on === sirenOn) return;
+      sirenOn = on;
+      if (sirenTimer) { clearInterval(sirenTimer); sirenTimer = null; }
+      if (!on) return;
+      let high = false;
+      sirenTimer = setInterval(() => {
+        if (!sirenOn) return;
+        high = !high;
+        blip(high ? 880 : 660, 0.35, 'sine', 0.05);
+      }, 380);
+    },
   };
 }

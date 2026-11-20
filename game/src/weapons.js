@@ -1,112 +1,99 @@
-// weapons.js — weapon wheel + combat. Hold Q (or press Tab) to open the
-// radial wheel; pick with mouse or keys 1–3. Attack with F or left click.
-// Fist, Pistol (ammo) and SMG (ammo, faster). Ammo refills at the garage.
+// weapons.js — Roda senjata radial (Q / Tab) + combat.
+// 1 Tinju, 2 Pistol (amunisi), 3 SMG (amunisi, lebih cepat).
+// Serang dengan F atau klik kiri. Menyerang polisi/pejalan kaki
+// menaikkan Wanted & menurunkan reputasi distrik setempat.
 import * as THREE from 'three';
 
 export const WEAPONS = [
-  { id: 'fist', name: 'Tinju', key: '1', range: 3.2, damage: 12, rate: 0.45, ammo: Infinity },
-  { id: 'pistol', name: 'Pistol', key: '2', range: 42, damage: 34, rate: 0.4, ammoKey: 'pistol' },
-  { id: 'smg', name: 'SMG', key: '3', range: 36, damage: 18, rate: 0.11, ammoKey: 'smg' },
+  { id: 'fist', name: 'Tinju', range: 2.6, damage: 15, rate: 0.45, ammo: null },
+  { id: 'pistol', name: 'Pistol', range: 42, damage: 34, rate: 0.35, ammo: 'pistol' },
+  { id: 'smg', name: 'SMG', range: 36, damage: 20, rate: 0.11, ammo: 'smg' },
 ];
 
-export function createWeapons(scene, camera, save, audio, onCrime) {
-  let selected = 0;
+export function createWeapons(scene, camera, save, audio, onHeat) {
+  const wheel = document.getElementById('weapon-wheel');
+  const segs = [...wheel.querySelectorAll('.wheel-seg')];
+  let selected = save.weapon || 0;
   let wheelOpen = false;
   let cooldown = 0;
-  const tracers = [];
+  let tracer = null;
 
-  function ammoCount(w) {
-    return w.ammoKey ? save.ammo[w.ammoKey] : Infinity;
+  function refreshWheel() {
+    segs.forEach((s, i) => s.classList.toggle('sel', i === selected));
+    const a1 = document.getElementById('wheel-ammo1');
+    const a2 = document.getElementById('wheel-ammo2');
+    if (a1) a1.textContent = `${save.ammo.pistol} peluru`;
+    if (a2) a2.textContent = `${save.ammo.smg} peluru`;
   }
 
-  function tracer(from, to) {
+  function showTracer(from, to) {
+    if (tracer) { scene.remove(tracer); tracer = null; }
     const geo = new THREE.BufferGeometry().setFromPoints([from, to]);
-    const line = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: 0xffe98a, transparent: true, opacity: 0.95 }));
-    scene.add(line);
-    tracers.push({ line, life: 0.12 });
+    tracer = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: 0xffe9a0 }));
+    scene.add(tracer);
+    setTimeout(() => { if (tracer) { scene.remove(tracer); tracer = null; } }, 90);
   }
 
-  function shoot(origin, dir, traffic, police) {
-    const w = WEAPONS[selected];
-    if (w.ammoKey) {
-      if (save.ammo[w.ammoKey] <= 0) {
-        audio.click();
-        return false;
-      }
-      save.ammo[w.ammoKey] -= 1;
-    }
-    audio.gunshot(w.id === 'smg');
-    const end = origin.clone().add(dir.clone().multiplyScalar(w.range));
-    tracer(origin, end);
-    // Hit the nearest pedestrian / police car roughly in front.
+  // Cari target terdekat di depan arah kamera dalam jangkauan.
+  function findTarget(origin, dir, range, candidates) {
     let best = null;
-    let bestD = w.range;
-    const candidates = [];
-    for (const p of traffic.peds) if (!p.down) candidates.push({ pos: p.pos, hit: () => { p.down = true; p.downTimer = 8; p.mesh.rotation.x = -Math.PI / 2; p.mesh.position.y = 0.3; } });
-    for (const c of police.cars) candidates.push({ pos: c.pos, hit: () => { c.speed = 0; } });
+    let bestD = range;
     for (const c of candidates) {
-      const to = c.pos.clone().sub(origin);
+      const to = new THREE.Vector3(c.pos.x - origin.x, 0, c.pos.z - origin.z);
       const d = to.length();
-      if (d > w.range || d < 0.5) continue;
-      const ang = to.normalize().angleTo(dir);
-      if (ang < 0.16 && d < bestD) { bestD = d; best = c; }
+      if (d > range || d < 0.5) continue;
+      to.normalize();
+      if (to.dot(dir) < 0.55) continue;
+      if (d < bestD) { bestD = d; best = c; }
     }
-    if (best) {
-      best.hit();
-      if (onCrime) onCrime(1);
-      const hitEnd = origin.clone().add(dir.clone().multiplyScalar(bestD));
-      tracer(origin, hitEnd);
-    }
-    return true;
+    return best;
   }
 
   return {
     get selected() { return selected; },
-    get wheelOpen() { return wheelOpen; },
-    get weaponName() { return WEAPONS[selected].name; },
-    ammoText() {
-      const w = WEAPONS[selected];
-      return w.ammoKey ? `${save.ammo[w.ammoKey]}` : '∞';
+    get weapon() { return WEAPONS[selected]; },
+    get isOpen() { return wheelOpen; },
+    select(i) { selected = Math.max(0, Math.min(2, i)); save.weapon = selected; refreshWheel(); },
+    openWheel() { wheelOpen = true; wheel.classList.add('on'); refreshWheel(); },
+    closeWheel() { wheelOpen = false; wheel.classList.remove('on'); },
+    pickFromMouse(mx, my) {
+      const cx = window.innerWidth / 2;
+      const cy = window.innerHeight / 2;
+      const dx = mx - cx;
+      const dy = my - cy;
+      if (Math.hypot(dx, dy) < 30) return;
+      if (dx < -40) this.select(0);
+      else if (dy < -30) this.select(1);
+      else if (dy > 30) this.select(2);
     },
-    setWheel(open) { wheelOpen = open; },
-    select(i) {
-      if (i >= 0 && i < WEAPONS.length) {
-        selected = i;
-        audio.click();
+    update(dt) { cooldown -= dt; },
+    // origin: posisi pemain/mobil, dir: arah hadap. candidates: {pos, kind, onHit}.
+    attack(origin, dir, candidates) {
+      if (cooldown > 0) return null;
+      const w = WEAPONS[selected];
+      if (w.ammo && save.ammo[w.ammo] <= 0) {
+        if (audio) audio.click();
+        return 'no-ammo';
       }
-    },
-    attack(origin, dir, traffic, police, isDriving) {
-      if (cooldown > 0) return;
-      const w = WEAPONS[selected];
       cooldown = w.rate;
-      if (w.id === 'fist') {
-        audio.punch();
-        // Melee: knock down a nearby pedestrian.
-        for (const p of traffic.peds) {
-          if (!p.down && p.pos.distanceTo(origin) < w.range) {
-            p.down = true;
-            p.downTimer = 8;
-            p.mesh.rotation.x = -Math.PI / 2;
-            p.mesh.position.y = 0.3;
-            if (onCrime) onCrime(1);
-            break;
-          }
+      if (w.ammo) save.ammo[w.ammo]--;
+      if (w.id === 'fist') { if (audio) audio.punch(); }
+      else if (audio) audio.shot();
+      const target = findTarget(origin, dir, w.range, candidates || []);
+      if (target) {
+        if (w.id !== 'fist') {
+          showTracer(new THREE.Vector3(origin.x, 1.4, origin.z),
+            new THREE.Vector3(target.pos.x, 1.2, target.pos.z));
         }
-      } else {
-        shoot(origin, dir, traffic, police);
+        if (target.onHit) target.onHit(w.damage);
+        if (onHeat) onHeat(target.kind === 'police' ? 1 : 1, target);
+        return target;
       }
-    },
-    update(dt) {
-      cooldown = Math.max(0, cooldown - dt);
-      for (let i = tracers.length - 1; i >= 0; i--) {
-        tracers[i].life -= dt;
-        tracers[i].line.material.opacity = Math.max(0, tracers[i].life / 0.12);
-        if (tracers[i].life <= 0) {
-          scene.remove(tracers[i].line);
-          tracers[i].line.geometry.dispose();
-          tracers.splice(i, 1);
-        }
+      if (w.id !== 'fist') {
+        const end = new THREE.Vector3(origin.x, 1.4, origin.z).addScaledVector(dir, w.range);
+        showTracer(new THREE.Vector3(origin.x, 1.4, origin.z), end);
       }
+      return null;
     },
   };
 }

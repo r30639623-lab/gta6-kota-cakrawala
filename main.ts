@@ -1,44 +1,47 @@
-// Kota Cakrawala — a gta6-01 entry (Node 22, standard library only): the game
-// is this directory's game/ folder, plain static files a desktop browser loads
-// offline (game/index.html and its ES modules, three.js vendored under
-// game/vendor/, no network request), and the program hands it in. It copies
-// game/ and screenshots/ from beside this file to /output and writes
-// /output/dossier.json, the summary the judge reads, with the vendored
-// make.fun library. The game itself is a complete open-world crime game:
-// a procedural coastal city to explore on foot and by car, traffic and
-// pedestrians, stealable cars, a wanted system with police chases, roadblocks
-// and a helicopter, 8 story missions from Bu Sari, combat with a weapon
-// wheel, a rich HUD with a labelled minimap, procedural radio and sound,
-// a garage with upgrades, and a localStorage save. Round 3 rebuild: every
-// source line was written fresh in the recorded session.
-// Serve it locally with `node serve.ts`, then open http://localhost:8080.
-// Outside the grader's container, MAKEFUN_OUTPUT_DIR stands in for /output:
-//   mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
-
-import { cpSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+// Kota Cakrawala — main.ts (Round 6 rebuild, 2026-11-20).
+// Program Node 22 stdlib-only: menyalin game/ + screenshots/ dari repo
+// ini ke /output (atau $MAKEFUN_OUTPUT_DIR) dan menulis
+// /output/dossier.json via buildDossier dari vendor/makefun-game.ts.
+// Fitur baru round 6: 12 misi 3 babak, 20 relik, 10 mobil + 3 garasi,
+// reputasi 5 distrik, Wanted ★1-5 diperkuat (heli + roadblock).
+import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildDossier } from './vendor/makefun-game.ts';
 
-const here = fileURLToPath(new URL('.', import.meta.url));
-const out = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
+const repoRoot = resolve(fileURLToPath(new URL('.', import.meta.url)));
+const outDir = resolve(process.env.MAKEFUN_OUTPUT_DIR || '/output');
 
-mkdirSync(out, { recursive: true });
-cpSync(join(here, 'game'), join(out, 'game'), { recursive: true });
-mkdirSync(join(out, 'screenshots'), { recursive: true });
-if (existsSync(join(here, 'screenshots'))) cpSync(join(here, 'screenshots'), join(out, 'screenshots'), { recursive: true });
+const CAPS = {
+  text_max_bytes: 163840,
+  screenshots: { max: 4, max_bytes: 256 * 1024 },
+  game_max_files: 993,
+  game_max_bytes: 48 * 1024 * 1024,
+  game_path_max_bytes: 1000,
+};
 
-// The scorer's own caps (reference/gate.json): only text_max_bytes shapes the bytes; the others refuse an entry the
-// scorer would refuse (more than 4 screenshots or one over 256 KiB; more than 993 files in game/ or 48 MiB of game
-// files, in all, or a path under game/ over 1000 bytes: game/ counts beside /output's own 1000-entry cap, its
-// screenshots/ and dossier.json).
-writeFileSync(
-  join(out, 'dossier.json'),
-  buildDossier(out, {
-    text_max_bytes: 163840,
-    screenshots: { max: 4, max_bytes: 262144 },
-    game_max_files: 993,
-    game_max_bytes: 50331648,
-    game_path_max_bytes: 1000,
-  }),
-);
+function copyTree(src, dest) {
+  mkdirSync(dest, { recursive: true });
+  for (const name of readdirSync(src)) {
+    const from = join(src, name);
+    const to = join(dest, name);
+    const info = statSync(from);
+    if (info.isDirectory()) copyTree(from, to);
+    else if (info.isFile()) cpSync(from, to);
+  }
+}
+
+function main() {
+  const gameSrc = join(repoRoot, 'game');
+  const shotsSrc = join(repoRoot, 'screenshots');
+  if (!existsSync(gameSrc)) throw new Error('game/ tidak ditemukan di repo');
+  rmSync(outDir, { recursive: true, force: true });
+  mkdirSync(outDir, { recursive: true });
+  copyTree(gameSrc, join(outDir, 'game'));
+  if (existsSync(shotsSrc)) copyTree(shotsSrc, join(outDir, 'screenshots'));
+  const dossier = buildDossier(outDir, CAPS);
+  writeFileSync(join(outDir, 'dossier.json'), dossier);
+  console.log(`Kota Cakrawala round 6 -> ${outDir} (dossier ${dossier.length} bytes)`);
+}
+
+main();

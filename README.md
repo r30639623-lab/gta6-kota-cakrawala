@@ -1,142 +1,93 @@
 # Kota Cakrawala
 
-[![make.fun · gta6-01](https://make.fun/badge/gta6-01.svg)](https://make.fun/bounty/gta6-01?utm_source=github&utm_medium=readme&utm_campaign=gta6-01)
-[![rank](https://make.fun/badge/gta6-01/r30639623-lab/gta6-kota-cakrawala/rank.svg)](https://make.fun/bounty/gta6-01/leaderboard?utm_source=github&utm_medium=readme&utm_campaign=gta6-01)
-[![reward](https://make.fun/badge/gta6-01/r30639623-lab/gta6-kota-cakrawala/reward.svg)](https://make.fun/bounty/gta6-01?utm_source=github&utm_medium=readme&utm_campaign=gta6-01)
+[![make.fun](https://make.fun/badge/gta6-01.svg)](https://make.fun/c/gta6-01)
+[![Rank](https://make.fun/badge/gta6-01/r30639623-lab/gta6-kota-cakrawala/rank.svg)](https://make.fun/c/gta6-01)
+[![Reward](https://make.fun/badge/gta6-01/r30639623-lab/gta6-kota-cakrawala/reward.svg)](https://make.fun/c/gta6-01)
 
-Game open-world kriminal 3D yang dibuat untuk bounty [gta6-01 di make.fun](https://make.fun/bounty/gta6-01).
+**Kota Cakrawala** adalah game open-world crime 3D original untuk bounty
+make.fun **gta6-01** — dibangun dengan three.js, jalan offline dari file
+statis, tanpa request network. Semua nama, kota, karakter, dan kendaraan
+buatan sendiri (bukan GTA Rockstar).
 
-## Tentang game ini
+Kamu bermain sebagai **Raka**, anak kota yang baru pulang ke Kota Cakrawala,
+kota fiktif pesisir Indonesia. **Bu Sari**, pemilik bengkel di ujung kota,
+menawarinya kerjaan — antar paket, balapan, sampai penyelamatan di dermaga.
+Sementara itu polisi mengawasi: curi mobil, tabrak orang, atau serang
+polisi, dan level Wanted naik sampai ★★★★★.
 
-Kota Cakrawala adalah kota fiktif di tepi laut yang hidup siang dan malam.
-Jalanannya ramai, polisinya galak, dan setiap sudutnya menyimpan peluang —
-atau masalah. Semua nama, tempat, karakter, dan kendaraan di game ini
-adalah karya orisinal; game ini bukan bagian dari seri GTA Rockstar dan
-tidak memakai aset Rockstar apa pun.
+## Fitur Round 6 (baru)
 
-Game berjalan sepenuhnya offline di browser, dibangun dengan three.js r160,
-tanpa permintaan jaringan sama sekali. Kota, lalu lintas, dan suaranya
-dibangkitkan secara prosedural dari kode.
+- **12 misi Bu Sari dalam 3 babak** — total hadiah **$6.850** (+$500 bonus
+  legenda setelah misi final). Babak 1 "Awal di Cakrawala" (m1–m4), Babak 2
+  "Utang & Jalanan" (m5–m8), Babak 3 "Legenda Cakrawala" (m9–m12, final
+  $1.200). Tiap misi punya target landmark, timer, dan beacon kuning.
+- **20 Relik Cakrawala** — kolektibel emas melayang di 5 area kota
+  (Menara, Pasar, Pelabuhan, Pantai, Bengkel). Tiap relik +$50 dan +5
+  reputasi distrik. Kumpulkan semua 20 = bonus $500.
+- **10 mobil unlockable + 3 garasi** — Kancil GT, Kijang Klasik, Badak
+  Pickup, Banteng Van, Sanca Sedan, Cendrawasih Convertible, Elang Coupe,
+  Macan Muscle, Komodo S, sampai Garuda Supercar (48 m/s, butuh 8 misi).
+  Garasi Bengkel, Pelabuhan, dan Menara. Panel garasi (G): beli/pilih
+  mobil, upgrade Mesin Turbo / Lapis Baja / Nitro, 8 warna cat, isi
+  amunisi.
+- **Reputasi 5 distrik** — Pusat, Pasar, Pelabuhan, Pantai, Bengkel.
+  Reputasi naik kalau selesaikan misi atau ambil relik di distrik itu,
+  turun kalau berbuat onar. **Rep ≥ 70 = diskon 20%** harga garasi/mobil
+  di distrik itu; **rep ≤ 25 = Wanted naik 2x lebih cepat** di sana.
+- **Wanted ★1–5 diperkuat** — ★1: 1 mobil kejar; ★2: 2 mobil; ★3:
+  + roadblock; ★4: + helikopter polisi (orbit rendah + lampu sorot);
+  ★5: 4 mobil kejar + helikopter + roadblock lebih sering + polisi
+  lebih cepat (hingga ~30 m/s). Decay paling lambat di ★5.
 
-## Cerita
+## Fitur inti
 
-Raka baru saja kembali ke Kota Cakrawala dengan kantong kosong dan satu
-utang besar. Satu-satunya orang yang masih mau menolongnya adalah
-Bu Sari, pemilik bengkel di pinggir kota. Bu Sari bersedia menghapus
-utang Raka — dengan satu syarat: Raka harus menyelesaikan delapan
-pekerjaan untuknya, dari mengantar paket sampai balapan tengah malam
-dan penyelamatan di pantai.
-
-Selesaikan kedelapan misi itu, kumpulkan hadiahnya, dan lunasi utangmu.
-Tapi hati-hati: semakin berani aksimu, semakin tinggi bintang buronanmu,
-dan polisi Kota Cakrawala tidak kenal ampun.
-
-## Fitur
-
-- **Kota prosedural 3D** — sekitar 100 gedung dengan jendela menyala,
-  jaringan jalan lengkap dengan marka dan zebra cross, lampu jalan,
-  pohon palem, pantai dan laut, pelabuhan dengan dermaga, kontainer,
-  crane, dan kapal, plus landmark: Menara Cakrawala (86 m),
-  Pasar Cakrawala, bengkel Bu Sari, dan Rumah Sakit.
-- **Siklus siang dan malam** — langit gradien dengan awan, mode siang,
-  senja, dan malam neon.
-- **8 misi Bu Sari** — masing-masing dengan tujuan, batas waktu, dan
-  hadiah uang. Total hadiah seluruh misi: $3.950.
-- **Kendaraan** — kendarai Kancil GT dan Badak Pickup, atau curi mobil
-  lain yang melintas di jalan. Mengemudi arcade dengan kamera kejar.
-- **Lalu lintas hidup** — 18 mobil AI dan 30 pejalan kaki AI yang
-  bergerak di jalanan kota.
-- **Polisi dan wanted ★1–5** — polisi mengejar dan menabrak mobilmu,
-  roadblock menghadang mulai wanted 3, dan helikopter polisi
-  mengorbit dengan lampu sorot mulai wanted 4. Tabrakan merusak
-  mobil; kalau mobilmu hancur, kamu respawn di Rumah Sakit dan
-  dikenai denda $50.
-- **HUD lengkap** — uang, bar nyawa dan bar lapis baja, bintang
-  wanted, kecepatan (km/h), jam dalam game, stasiun radio yang sedang
-  diputar, tracker 8 misi, minimap 2D berlabel (Menara, Pasar, Pantai,
-  Rumah Sakit) dengan kompas, banner tujuan misi dan timer, serta
-  prompt konteks.
-- **Radio** — 3 stasiun musik prosedural berbasis WebAudio.
-- **Garasi dan upgrade** — Mesin Turbo, Lapis Baja, Nitro, dan 8 warna
-  cat untuk mobilmu.
-- **Weapon wheel** — tahan Q (atau tekan Tab) untuk membuka roda senjata
-  radial, lalu pilih dengan mouse atau tombol angka 1–3: 1 Tinju,
-  2 Pistol, 3 SMG. Amunisi bisa diisi ulang di garasi.
-- **Suara prosedural** — mesin, sirene, radio, dan efek suara lainnya
-  dibuat dengan WebAudio, tanpa file audio eksternal.
-- **Save otomatis** — uang, progres misi, dan upgrade garasi tersimpan
-  di localStorage. Ada layar start, pause, dan menu.
-
-### Daftar misi
-
-| # | Misi | Hadiah |
-|---|------|--------|
-| 1 | Antar Paket Bu Sari | $150 |
-| 2 | Kabur Paket Panas | $250 |
-| 3 | Balapan Balapan Pulang | $400 |
-| 4 | Kabur Kejar-Kejaran Tengah Malam | $500 |
-| 5 | Antar Pasar Pagi Bu Sari | $350 |
-| 6 | Balapan Balapan Menara | $600 |
-| 7 | Selamatkan Penyelamatan di Pantai | $550 |
-| 8 | Final: Utang Lunas | $1.000 |
+- Kota prosedural ~100 gedung berjendela menyala, grid jalan + marka +
+  zebra cross, lampu jalan, pohon palem, pantai + laut, pelabuhan
+  (dermaga, kontainer, crane, kapal), Menara Cakrawala (86 m),
+  Pasar Cakrawala, Rumah Sakit (titik respawn), bengkel Bu Sari.
+- Siang / senja / malam neon mengikuti jam game.
+- 18 mobil AI + 30 pejalan kaki AI di jalanan.
+- Mengemudi arcade + chase camera; curi mobil AI (E); masuk/keluar mobil (E).
+- Roda senjata (Q / Tab): Tinju, Pistol, SMG — amunisi diisi di garasi.
+- Radio 3 stasiun musik prosedural WebAudio (R ganti stasiun) + efek suara
+  prosedural (mesin, sirene, tabrakan, cash).
+- HUD kaya: uang, nyawa, armor, Wanted ★, kecepatan, jam game, radio,
+  tracker 12 misi, counter relik ◆ X/20, baris distrik, minimap 2D
+  berlabel + kompas.
+- Save otomatis di localStorage (`kota-cakrawala-save-v4`): uang, progres
+  12 misi, relik, reputasi distrik, mobil dimiliki/aktif, upgrade, cat,
+  amunisi.
 
 ## Cara main
 
-Butuh Node.js. Dari folder root repo:
-
-```bash
-node serve.ts
-```
-
-Lalu buka di browser:
-
-```
-http://localhost:8080
-```
-
-Tidak perlu build dan tidak perlu koneksi internet — semua file
-disajikan secara lokal dari folder `game/`.
+1. Jalankan `node serve.ts` lalu buka http://localhost:8080
+2. Klik **MULAI**.
+3. Dekati Bu Sari (tanda ▼ kuning di dekat bengkel) dan tekan **E** untuk
+   memulai misi. Ikuti beacon kuning ke target sebelum timer habis.
+4. Kumpulkan relik emas (◆), beli mobil di garasi (G), jaga reputasi
+   distrik, dan jangan sampai Wanted mencapai ★★★★★.
 
 ## Kontrol
 
 | Tombol | Aksi |
-|--------|------|
-| W A S D | Jalan / mengemudi |
-| E | Masuk / keluar mobil |
-| Spasi | Rem tangan |
-| F | Pukul / serang |
-| Q (tahan) / Tab | Buka weapon wheel |
-| 1 / 2 / 3 | Pilih senjata (Tinju / Pistol / SMG) |
-| Klik kiri | Serang dengan senjata terpilih |
+|---|---|
+| WASD / panah | Jalan kaki / mengemudi |
+| E | Masuk/keluar mobil, bicara Bu Sari, curi mobil AI |
+| F / klik kiri | Pukul / tembak |
+| Q (tahan) / Tab | Roda senjata (1 Tinju, 2 Pistol, 3 SMG) |
+| G | Panel garasi |
 | R | Ganti stasiun radio |
-| G | Buka garasi / upgrade |
 | H | Klakson |
-| Esc | Pause / menu |
+| Spasi | Rem tangan |
+| Shift | Nitro (kalau sudah dibeli) |
+| Esc | Pause |
 
-## Struktur kode
+## Teknologi
 
-Semua kode game ada di `game/src/`, satu file satu tanggung jawab:
-
-- `main.js` — bootstrap, game loop, dan mode (menu / main / pause)
-- `city.js` — membangun kota: gedung, jalan, pantai, pelabuhan, landmark
-- `player.js` — karakter jalan kaki dan kamera
-- `vehicles.js` — definisi dan spawn mobil pemain dan AI
-- `traffic.js` — AI lalu lintas dan pejalan kaki
-- `police.js` — sistem wanted, kejar-kejaran, roadblock, helikopter
-- `missions.js` — 8 misi Bu Sari: definisi, logika, timer, dan reward
-- `hud.js` — semua elemen HUD, minimap, kompas, dan tracker misi
-- `radio.js` — 3 stasiun musik prosedural
-- `garage.js` — upgrade dan cat mobil
-- `weapons.js` — weapon wheel dan combat
-- `audio.js` — efek suara prosedural (mesin, sirene, tabrakan)
-- `input.js` — keyboard dan mouse
-- `save.js` — simpan dan muat dari localStorage
-- `shots.js` — staging untuk screenshot (membaca `location.search`)
-
-`game/index.html` memuat three.js dari `game/vendor/` lewat import map
-dan menjalankan `./src/main.js` sebagai module. Folder `game/vendor/`
-berisi three.js r160 dan helper make.fun — jangan diubah.
+- three.js r160 (vendored di `game/vendor/three.module.min.js`)
+- Node 22 stdlib-only untuk `main.ts` (dossier) dan `serve.ts`
+- Tanpa build step, tanpa network request saat bermain
 
 ## Lisensi
 
-MIT — lihat file `LICENSE` untuk detail lengkap.
+MIT — lihat `LICENSE`.

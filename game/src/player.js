@@ -1,79 +1,87 @@
-// player.js — Raka on foot: WASD movement, a simple stylised figure,
-// and the camera-follow target. spawn() is also the playtest hook.
+// player.js — Raka jalan kaki + kamera orang ketiga.
 import * as THREE from 'three';
+import { collideCircle } from './vehicles.js';
 
-export function createPlayer(scene) {
-  const g = new THREE.Group();
-  const jacket = new THREE.MeshStandardMaterial({ color: 0x2a6db0, roughness: 0.85 });
-  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.44, 1.05, 10), jacket);
-  body.position.y = 0.98;
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.3, 12, 10),
-    new THREE.MeshStandardMaterial({ color: 0xe8b98a, roughness: 0.8 }));
-  head.position.y = 1.78;
-  const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.32, 0.12, 12),
-    new THREE.MeshStandardMaterial({ color: 0xd9a520, roughness: 0.7 }));
-  cap.position.y = 2.02;
-  const legs = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.55, 0.32),
-    new THREE.MeshStandardMaterial({ color: 0x22262e, roughness: 1 }));
-  legs.position.y = 0.28;
-  const armMat = jacket;
-  const armL = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.7, 0.16), armMat);
-  armL.position.set(-0.46, 1.05, 0);
-  const armR = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.7, 0.16), armMat);
-  armR.position.set(0.46, 1.05, 0);
-  g.add(body, head, cap, legs, armL, armR);
-  g.position.set(-248, 0, 244);
-  scene.add(g);
+export function createPlayer(scene, colliders) {
+  const group = new THREE.Group();
+  const bodyMat = new THREE.MeshStandardMaterial({ color: 0x2a6fd6, roughness: 0.8 });
+  const skinMat = new THREE.MeshStandardMaterial({ color: 0xe8b88a, roughness: 0.7 });
+  const pantsMat = new THREE.MeshStandardMaterial({ color: 0x223344, roughness: 0.85 });
+
+  const torso = new THREE.Mesh(new THREE.BoxGeometry(0.85, 1.05, 0.5), bodyMat);
+  torso.position.y = 1.35;
+  group.add(torso);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.34, 12, 10), skinMat);
+  head.position.y = 2.2;
+  group.add(head);
+  const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.38, 0.16, 12),
+    new THREE.MeshStandardMaterial({ color: 0xd7263d, roughness: 0.7 }));
+  cap.position.y = 2.48;
+  group.add(cap);
+  const legL = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.9, 0.36), pantsMat);
+  legL.position.set(-0.22, 0.45, 0);
+  group.add(legL);
+  const legR = legL.clone();
+  legR.position.x = 0.22;
+  group.add(legR);
+  const armL = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.85, 0.3), bodyMat);
+  armL.position.set(-0.58, 1.35, 0);
+  group.add(armL);
+  const armR = armL.clone();
+  armR.position.x = 0.58;
+  group.add(armR);
+  group.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+  scene.add(group);
 
   const player = {
-    mesh: g,
-    pos: g.position,
+    mesh: group,
+    pos: new THREE.Vector3(-252, 0, 246),
     heading: 0,
-    speed: 0,
+    walkPhase: 0,
     spawn(v, heading) {
-      g.position.set(v.x, 0, v.z);
-      if (typeof heading === 'number') {
-        player.heading = heading;
-        g.rotation.y = heading;
-      }
+      player.pos.set(v.x, 0, v.z);
+      if (heading !== undefined) player.heading = heading;
+      group.position.copy(player.pos);
+      group.rotation.y = player.heading;
     },
-    update(dt, input, cameraYaw) {
-      let fx = 0;
-      let fz = 0;
-      if (input.isDown('KeyW') || input.isDown('ArrowUp')) fz -= 1;
-      if (input.isDown('KeyS') || input.isDown('ArrowDown')) fz += 1;
-      if (input.isDown('KeyA') || input.isDown('ArrowLeft')) fx -= 1;
-      if (input.isDown('KeyD') || input.isDown('ArrowRight')) fx += 1;
-      const moving = fx !== 0 || fz !== 0;
-      const walkSpeed = input.isDown('ShiftLeft') ? 7.5 : 4.6;
-      if (moving) {
-        const len = Math.hypot(fx, fz);
-        fx /= len;
-        fz /= len;
-        // Movement relative to the camera yaw.
-        const sin = Math.sin(cameraYaw);
-        const cos = Math.cos(cameraYaw);
-        const wx = (fx * cos - fz * sin);
-        const wz = (fx * sin + fz * cos);
-        g.position.x += wx * walkSpeed * dt;
-        g.position.z += wz * walkSpeed * dt;
-        player.heading = Math.atan2(wx, wz);
-        g.rotation.y = player.heading;
-        player.speed = walkSpeed;
-        // Walk bob.
-        g.position.y = Math.abs(Math.sin(performance.now() * 0.012)) * 0.07;
-        armL.rotation.x = Math.sin(performance.now() * 0.012) * 0.6;
-        armR.rotation.x = -Math.sin(performance.now() * 0.012) * 0.6;
-      } else {
-        player.speed = 0;
-        g.position.y = 0;
-        armL.rotation.x = 0;
-        armR.rotation.x = 0;
+    update(dt, input, driving) {
+      if (driving) {
+        group.visible = false;
+        return;
       }
-      // Keep Raka inside the map.
-      g.position.x = THREE.MathUtils.clamp(g.position.x, -310, 310);
-      g.position.z = THREE.MathUtils.clamp(g.position.z, -310, 345);
+      group.visible = true;
+      const fwd = (input.forward ? 1 : 0) - (input.back ? 1 : 0);
+      const strafe = (input.right ? 1 : 0) - (input.left ? 1 : 0);
+      const speed = 6.5;
+      let mx = 0;
+      let mz = 0;
+      if (fwd !== 0 || strafe !== 0) {
+        const sin = Math.sin(player.heading);
+        const cos = Math.cos(player.heading);
+        // Kamera di belakang pemain: W menjauhi kamera.
+        mx = (sin * fwd + cos * strafe) * speed;
+        mz = (cos * fwd - sin * strafe) * speed;
+        player.heading = Math.atan2(mx, mz);
+      }
+      const nx = player.pos.x + mx * dt;
+      const nz = player.pos.z + mz * dt;
+      if (!collideCircle(nx, nz, 0.7, colliders)) {
+        player.pos.x = nx;
+        player.pos.z = nz;
+      }
+      player.pos.x = Math.max(-308, Math.min(343, player.pos.x));
+      player.pos.z = Math.max(-308, Math.min(343, player.pos.z));
+      const moving = Math.abs(mx) + Math.abs(mz) > 0.1;
+      if (moving) player.walkPhase += dt * 11;
+      const swing = moving ? Math.sin(player.walkPhase) * 0.55 : 0;
+      legL.rotation.x = swing;
+      legR.rotation.x = -swing;
+      armL.rotation.x = -swing * 0.8;
+      armR.rotation.x = swing * 0.8;
+      group.position.copy(player.pos);
+      group.rotation.y = player.heading;
     },
   };
+  group.position.copy(player.pos);
   return player;
 }
