@@ -1,9 +1,12 @@
-// save.js — Save/load localStorage, key v4 (round 6).
+// save.js — Simpan/muat progres Kota Cakrawala di localStorage.
+// Key v4 (round 6): uang, nyawa, armor, misi, relik, reputasi distrik,
+// mobil yang dimiliki/aktif, upgrade garasi, cat, amunisi.
+
 export const SAVE_KEY = 'kota-cakrawala-save-v4';
 
 export function defaultSave() {
   return {
-    money: 500,
+    money: 250,
     health: 100,
     armor: 0,
     missionsDone: [],
@@ -11,41 +14,46 @@ export function defaultSave() {
     rep: { pusat: 50, pasar: 50, pelabuhan: 50, pantai: 50, bengkel: 50 },
     ownedCars: ['kancil'],
     activeCarId: 'kancil',
-    paintIndex: 0,
-    upgrades: { turbo: false, armorUp: false, nitro: false },
-    ammo: { pistol: 60, smg: 90 },
-    weapon: 0,
-    radioStation: 0,
-    allRelicsBonus: false,
-    legendBonus: false,
+    upgrades: { turbo: false, armor: false, nitro: false },
+    paint: 0,
+    ammo: { pistol: 24, smg: 90 },
+    totalEarned: 0,
+    busted: 0,
   };
 }
 
 export function loadSave() {
+  const fresh = defaultSave();
   try {
-    const raw = localStorage.getItem(SAVE_KEY);
-    if (!raw) return defaultSave();
-    const parsed = JSON.parse(raw);
-    const base = defaultSave();
-    const merged = { ...base, ...parsed };
-    merged.rep = { ...base.rep, ...(parsed.rep || {}) };
-    merged.upgrades = { ...base.upgrades, ...(parsed.upgrades || {}) };
-    merged.ammo = { ...base.ammo, ...(parsed.ammo || {}) };
-    if (!Array.isArray(merged.missionsDone)) merged.missionsDone = [];
-    if (!Array.isArray(merged.relicsFound)) merged.relicsFound = [];
-    if (!Array.isArray(merged.ownedCars) || merged.ownedCars.length === 0) merged.ownedCars = ['kancil'];
-    return merged;
+    const raw = window.localStorage.getItem(SAVE_KEY);
+    if (!raw) return fresh;
+    const data = JSON.parse(raw);
+    if (!data || typeof data !== 'object') return fresh;
+    const out = { ...fresh, ...data };
+    out.rep = { ...fresh.rep, ...(data.rep || {}) };
+    out.upgrades = { ...fresh.upgrades, ...(data.upgrades || {}) };
+    out.ammo = { ...fresh.ammo, ...(data.ammo || {}) };
+    out.missionsDone = Array.isArray(data.missionsDone) ? data.missionsDone : [];
+    out.relicsFound = Array.isArray(data.relicsFound) ? data.relicsFound : [];
+    out.ownedCars = Array.isArray(data.ownedCars) && data.ownedCars.length ? data.ownedCars : ['kancil'];
+    return out;
   } catch {
-    return defaultSave();
+    return fresh;
   }
 }
 
 export function storeSave(save) {
   try {
-    localStorage.setItem(SAVE_KEY, JSON.stringify(save));
-  } catch { /* storage penuh / privat: abaikan */ }
+    window.localStorage.setItem(SAVE_KEY, JSON.stringify(save));
+  } catch {
+    // Penyimpanan penuh/diblokir: game tetap jalan tanpa save.
+  }
 }
 
-export function clearSave() {
-  try { localStorage.removeItem(SAVE_KEY); } catch { /* abaikan */ }
+export function wipeSave() {
+  try {
+    window.localStorage.removeItem(SAVE_KEY);
+  } catch {
+    // abaikan
+  }
 }

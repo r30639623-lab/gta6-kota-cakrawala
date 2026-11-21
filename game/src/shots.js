@@ -1,112 +1,96 @@
-// shots.js — Staging 4 screenshot (?shot=cover|drive|mission|menu&seed=1).
-// Membaca location.search, mengatur kamera/posisi/waktu/wanted per shot,
-// lalu set window.__shotReady = true saat scene siap difoto.
-import * as THREE from 'three';
-import { RELICS } from './collectibles.js';
+// shots.js — Staging 4 screenshot Kota Cakrawala (round 7, seed 2).
+// Membaca ?shot=cover|drive|mission|menu&seed=2 dari URL, menata
+// dunia (waktu, posisi, Wanted, helikopter, misi), lalu memberi tahu
+// main.js kamera tetap yang dipakai dan kapan scene siap difoto.
 
-export function setupShots(game) {
-  const params = new URLSearchParams(location.search);
-  const shot = params.get('shot');
-  if (!shot) return;
+export function parseShot() {
+  const q = new URLSearchParams(window.location.search);
+  return {
+    shot: q.get('shot') || null,
+    seed: Number(q.get('seed') || '2') || 2,
+  };
+}
 
-  const { city, player, car, police, missions, hud, save, districts } = game;
-
-  function ready(delay = 900) {
-    setTimeout(() => { window.__shotReady = true; }, delay);
-  }
-
-  function showHud() {
-    document.getElementById('hud').classList.add('on');
-    document.getElementById('menu-overlay').classList.add('off');
-    document.getElementById('pause-overlay').classList.remove('on');
-  }
-
-  if (shot === 'cover') {
-    // Kejar-kejaran polisi saat senja, wanted ★★★★, heli BESAR, roadblock.
-    game.mode = 'main';
-    game.setGameTime(18, 12);
-    city.setTimeOfDay('senja');
-    showHud();
-    save.money = 2350;
-    car.pos.set(0, 0, 10);
-    car.heading = Math.PI;
-    car.speed = 12;
-    game.driving = true;
-    player.mesh.visible = false;
-    missions.startById('m2');
+// Menata dunia untuk satu shot. ctx disediakan main.js:
+// { city, player, car, police, missions, save, setClock(h), start() }.
+// Mengembalikan { camPos:[x,y,z], camLook:[x,y,z] } untuk kamera tetap,
+// atau null bila shot memakai kamera kejar biasa.
+export function stageShot(ctx, name) {
+  const { city, player, car, police, missions } = ctx;
+  if (name === 'cover') {
+    // Kejar-kejaran polisi saat senja di jalan Pasar: Wanted 4,
+    // helikopter BESAR di frame dengan sorot, roadblock di depan,
+    // beacon misi & aula Pasar di latar, HUD penuh. Menara sengaja
+    // di luar frame supaya tidak mendominasi; roadblock ditaruh di
+    // jalan kosong sebelum area kios supaya tidak tertutup.
+    city.setTimeOfDay('dusk');
+    ctx.setClock(18.2);
+    ctx.start();
+    car.teleport(-120, 160, Math.PI);
+    car.setSpeed(16);
     police.setWanted(4);
-    // Heli BESAR di frame: kiri atas, putih-biru kontras langit senja.
-    police.placeHeliForShot(-17, 21, -16, new THREE.Vector3(0, 2, 0), 2.5);
-    // Roadblock di depan mobil.
-    const rb = police.roadblocks[0];
-    rb.group.position.set(0, 0, -42);
-    rb.group.rotation.y = 0;
-    rb.group.visible = true;
-    rb.active = true;
-    rb.timer = 60;
-    // Dua mobil polisi mengejar dari samping-belakang mobil.
-    const pc0 = police.cars[0];
-    pc0.active = true;
-    pc0.mesh.visible = true;
-    pc0.pos.set(-8, 0, 2);
-    pc0.heading = Math.PI;
-    const pc1 = police.cars[1];
-    pc1.active = true;
-    pc1.mesh.visible = true;
-    pc1.pos.set(9, 0, -2);
-    pc1.heading = Math.PI;
-    // Kamera sinematik: rendah di belakang mobil, heli di atas frame.
-    game.lockCamera(new THREE.Vector3(9, 6.5, 30), new THREE.Vector3(-1, 4, -30));
-    hud.showBanner('★ KEJAR-KEJARAN POLISI ★', 30);
-    ready(1100);
-    return;
+    police.placeRoadblock(-120, 132, 0);
+    // Helikopter RATA (level) & utuh di frame: y 12 supaya badannya
+    // di atas atap gedung cokelat dan berlatar langit senja (kontras),
+    // z 132 (lebih dekat ke kamera) + skala 1.5 supaya besar & jelas
+    // terbaca sebagai helikopter. Profil samping tiga-perempat
+    // (hidung sedikit menghadap kamera, kaca kokpit terlihat).
+    // Jangan pakai lookAt ke bawah — itu yang bikin badan miring tajam
+    // & ekor terpotong tepi atas.
+    police.placeHeliForShot(-116, 12, 132, { x: -120, y: 2, z: 138 }, 1.5);
+    police.heli.rotation.set(0, Math.PI / 2 - 0.3, 0);
+    missions.startById('m1');
+    // Biarkan polisi mengejar & mendekat sebelum difoto; pejalan kaki
+    // di sekitar mobil dipindah supaya tidak menghalangi frame.
+    ctx.traffic.scatterPeds(-120, 140, 35);
+    for (let i = 0; i < 30; i++) police.update(0.1, car.pos, 16, null);
+    police.setWanted(4);
+    // Pisahkan mobil polisi jadi formasi rapi & kunci: dua di belakang
+    // mobil pemain (kiri/kanan), satu memotong di depan — semua sejajar
+    // menghadap utara, tidak bertumpuk, tidak miring.
+    police.placeCarsForShot([
+      { x: -127, z: 152, heading: Math.PI },
+      { x: -113, z: 150, heading: Math.PI },
+      { x: -120, z: 141, heading: Math.PI },
+    ]);
+    return {
+      camPos: [-108, 8, 164],
+      camLook: [-120, 1, 134],
+    };
   }
-
-  if (shot === 'drive') {
-    // Jalan siang yang ramai di jalan utama.
-    game.mode = 'main';
-    game.setGameTime(10, 30);
-    city.setTimeOfDay('siang');
-    showHud();
-    car.pos.set(80, 0, 60);
-    car.heading = 0;
-    car.speed = 9;
-    game.driving = true;
-    player.mesh.visible = false;
-    ready(900);
-    return;
+  if (name === 'drive') {
+    // Jalan siang yang ramai: mengemudi di jalan utama Pusat.
+    city.setTimeOfDay('day');
+    ctx.setClock(10.5);
+    ctx.start();
+    car.teleport(40, 120, 0);
+    car.setSpeed(20);
+    police.setWanted(0);
+    return null; // kamera kejar biasa
   }
-
-  if (shot === 'mission') {
-    // Raka di dermaga, beacon misi babak 2 + satu relik emas di frame.
-    game.mode = 'main';
-    game.setGameTime(17, 40);
-    city.setTimeOfDay('senja');
-    showHud();
-    if (!save.missionsDone.includes('m1')) save.missionsDone = ['m1', 'm2', 'm3', 'm4'];
+  if (name === 'mission') {
+    // Raka di dermaga: beacon misi Babak 2 + satu relik emas di frame,
+    // kapal & laut di latar. Kamera di selatan kontainer supaya tidak
+    // terhalang crane; Raka menghadap kamera.
+    city.setTimeOfDay('dusk');
+    ctx.setClock(17.6);
+    ctx.start();
     missions.startById('m8');
-    // Raka di jalan depan kamera (ruang terbuka, tanpa pohon di depannya).
-    player.spawn(new THREE.Vector3(216, 0, 320), Math.PI * 0.7);
-    game.driving = false;
-    const relic = RELICS.find((r) => r.id === 'r9');
-    // Kamera mundur + tinggi: Raka utuh di frame bawah, beacon di tengah.
-    game.lockCamera(new THREE.Vector3(188, 20, 288), new THREE.Vector3(246, 2, 356));
-    hud.showBanner('Misi: Utang Setengah Lunas — ke Dermaga!', 30);
-    ready(1100);
-    return;
+    player.spawn({ x: 244, y: 0, z: 346 }, -2.47);
+    police.setWanted(0);
+    return {
+      camPos: [236, 4, 336],
+      camLook: [250, 3, 362],
+    };
   }
-
-  if (shot === 'menu') {
-    // Layar start + progres (12 misi, relik, reputasi distrik).
-    game.mode = 'menu';
-    if (save.missionsDone.length < 5) save.missionsDone = ['m1', 'm2', 'm3', 'm4', 'm5'];
-    if (save.relicsFound.length < 7) save.relicsFound = ['r1', 'r2', 'r5', 'r9', 'r13', 'r17', 'r18'];
-    save.money = 1850;
-    document.getElementById('menu-overlay').classList.remove('off');
-    document.getElementById('hud').classList.remove('on');
-    ready(700);
-    return;
+  if (name === 'menu') {
+    // Layar start di depan skyline senja + Menara Cakrawala.
+    city.setTimeOfDay('dusk');
+    ctx.setClock(18.0);
+    return {
+      camPos: [120, 55, 190],
+      camLook: [0, 25, -30],
+    };
   }
-
-  ready(800);
+  return null;
 }

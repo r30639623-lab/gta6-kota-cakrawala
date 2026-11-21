@@ -1,99 +1,105 @@
-// weapons.js — Roda senjata radial (Q / Tab) + combat.
-// 1 Tinju, 2 Pistol (amunisi), 3 SMG (amunisi, lebih cepat).
-// Serang dengan F atau klik kiri. Menyerang polisi/pejalan kaki
-// menaikkan Wanted & menurunkan reputasi distrik setempat.
+// weapons.js — Roda senjata radial Kota Cakrawala (tahan Q / Tab):
+// 1 Tinju (tanpa amunisi), 2 Pistol, 3 SMG (lebih cepat).
+// Serang dengan F / klik kiri. Amunisi diisi ulang di garasi ($50).
+
 import * as THREE from 'three';
 
 export const WEAPONS = [
-  { id: 'fist', name: 'Tinju', range: 2.6, damage: 15, rate: 0.45, ammo: null },
-  { id: 'pistol', name: 'Pistol', range: 42, damage: 34, rate: 0.35, ammo: 'pistol' },
-  { id: 'smg', name: 'SMG', range: 36, damage: 20, rate: 0.11, ammo: 'smg' },
+  { id: 'fist', name: 'Tinju', damage: 15, rate: 0.45, ammo: null, range: 2.4 },
+  { id: 'pistol', name: 'Pistol', damage: 34, rate: 0.35, ammo: 'pistol', range: 26 },
+  { id: 'smg', name: 'SMG', damage: 18, rate: 0.09, ammo: 'smg', range: 22 },
 ];
 
 export function createWeapons(scene, camera, save, audio, onHeat) {
-  const wheel = document.getElementById('weapon-wheel');
-  const segs = [...wheel.querySelectorAll('.wheel-seg')];
-  let selected = save.weapon || 0;
-  let wheelOpen = false;
+  let current = 0;
   let cooldown = 0;
-  let tracer = null;
+  let wheelOpen = false;
+  // Tracer tembakan: garis kuning singkat.
+  const tracerMat = new THREE.LineBasicMaterial({ color: 0xffe97a, transparent: true, opacity: 0.9 });
+  const tracerGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
+  const tracer = new THREE.Line(tracerGeo, tracerMat);
+  tracer.visible = false;
+  scene.add(tracer);
+  let tracerT = 0;
 
-  function refreshWheel() {
-    segs.forEach((s, i) => s.classList.toggle('sel', i === selected));
-    const a1 = document.getElementById('wheel-ammo1');
-    const a2 = document.getElementById('wheel-ammo2');
-    if (a1) a1.textContent = `${save.ammo.pistol} peluru`;
-    if (a2) a2.textContent = `${save.ammo.smg} peluru`;
-  }
-
-  function showTracer(from, to) {
-    if (tracer) { scene.remove(tracer); tracer = null; }
-    const geo = new THREE.BufferGeometry().setFromPoints([from, to]);
-    tracer = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: 0xffe9a0 }));
-    scene.add(tracer);
-    setTimeout(() => { if (tracer) { scene.remove(tracer); tracer = null; } }, 90);
-  }
-
-  // Cari target terdekat di depan arah kamera dalam jangkauan.
-  function findTarget(origin, dir, range, candidates) {
-    let best = null;
-    let bestD = range;
-    for (const c of candidates) {
-      const to = new THREE.Vector3(c.pos.x - origin.x, 0, c.pos.z - origin.z);
-      const d = to.length();
-      if (d > range || d < 0.5) continue;
-      to.normalize();
-      if (to.dot(dir) < 0.55) continue;
-      if (d < bestD) { bestD = d; best = c; }
-    }
-    return best;
+  function muzzleWorld(out) {
+    out.copy(camera.position);
+    const dir = new THREE.Vector3();
+    camera.getWorldDirection(dir);
+    out.addScaledVector(dir, 1.2);
+    out.y -= 0.25;
+    return out;
   }
 
   return {
-    get selected() { return selected; },
-    get weapon() { return WEAPONS[selected]; },
-    get isOpen() { return wheelOpen; },
-    select(i) { selected = Math.max(0, Math.min(2, i)); save.weapon = selected; refreshWheel(); },
-    openWheel() { wheelOpen = true; wheel.classList.add('on'); refreshWheel(); },
-    closeWheel() { wheelOpen = false; wheel.classList.remove('on'); },
-    pickFromMouse(mx, my) {
-      const cx = window.innerWidth / 2;
-      const cy = window.innerHeight / 2;
-      const dx = mx - cx;
-      const dy = my - cy;
-      if (Math.hypot(dx, dy) < 30) return;
-      if (dx < -40) this.select(0);
-      else if (dy < -30) this.select(1);
-      else if (dy > 30) this.select(2);
+    get current() {
+      return WEAPONS[current];
     },
-    update(dt) { cooldown -= dt; },
-    // origin: posisi pemain/mobil, dir: arah hadap. candidates: {pos, kind, onHit}.
-    attack(origin, dir, candidates) {
-      if (cooldown > 0) return null;
-      const w = WEAPONS[selected];
-      if (w.ammo && save.ammo[w.ammo] <= 0) {
-        if (audio) audio.click();
-        return 'no-ammo';
+    get wheelOpen() {
+      return wheelOpen;
+    },
+    setWheel(open) {
+      wheelOpen = open;
+      const el = document.getElementById('weapon-wheel');
+      if (el) el.style.display = open ? 'flex' : 'none';
+    },
+    select(i) {
+      if (i >= 0 && i < WEAPONS.length) {
+        current = i;
+        const segs = document.querySelectorAll('#weapon-wheel .wheel-seg');
+        segs.forEach((s, idx) => s.classList.toggle('active', idx === i));
       }
+    },
+    attack(playerPos, heading, targets) {
+      if (cooldown > 0) return false;
+      const w = WEAPONS[current];
       cooldown = w.rate;
-      if (w.ammo) save.ammo[w.ammo]--;
-      if (w.id === 'fist') { if (audio) audio.punch(); }
-      else if (audio) audio.shot();
-      const target = findTarget(origin, dir, w.range, candidates || []);
-      if (target) {
-        if (w.id !== 'fist') {
-          showTracer(new THREE.Vector3(origin.x, 1.4, origin.z),
-            new THREE.Vector3(target.pos.x, 1.2, target.pos.z));
+      if (w.ammo) {
+        if ((save.ammo[w.ammo] ?? 0) <= 0) {
+          if (audio) audio.click();
+          return false;
         }
-        if (target.onHit) target.onHit(w.damage);
-        if (onHeat) onHeat(target.kind === 'police' ? 1 : 1, target);
-        return target;
+        save.ammo[w.ammo]--;
+        if (audio) audio.shoot();
+        const from = muzzleWorld(new THREE.Vector3());
+        const dir = new THREE.Vector3(Math.sin(heading), 0, Math.cos(heading));
+        const to = from.clone().addScaledVector(dir, w.range);
+        tracerGeo.setFromPoints([from, to]);
+        tracer.visible = true;
+        tracerT = 0.07;
+      } else {
+        if (audio) audio.click();
       }
-      if (w.id !== 'fist') {
-        const end = new THREE.Vector3(origin.x, 1.4, origin.z).addScaledVector(dir, w.range);
-        showTracer(new THREE.Vector3(origin.x, 1.4, origin.z), end);
+      // Kena target terdekat di depan dalam jangkauan & kerucut 25 derajat.
+      let best = null;
+      let bestD = w.range;
+      const fx = Math.sin(heading);
+      const fz = Math.cos(heading);
+      for (const t of targets) {
+        const dx = t.x - playerPos.x;
+        const dz = t.z - playerPos.z;
+        const d = Math.hypot(dx, dz);
+        if (d > w.range || d < 0.01) continue;
+        const dot = (dx * fx + dz * fz) / d;
+        if (dot < 0.9) continue;
+        if (d < bestD) {
+          best = t;
+          bestD = d;
+        }
       }
-      return null;
+      if (best) {
+        if (best.onHit) best.onHit(w.damage);
+        if (onHeat) onHeat(best.kind === 'police' ? 8 : 5);
+        return true;
+      }
+      return false;
+    },
+    update(dt) {
+      cooldown = Math.max(0, cooldown - dt);
+      if (tracer.visible) {
+        tracerT -= dt;
+        if (tracerT <= 0) tracer.visible = false;
+      }
     },
   };
 }

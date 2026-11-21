@@ -1,36 +1,64 @@
-// input.js — Keyboard + mouse state.
+// input.js — Keyboard + mouse untuk Kota Cakrawala.
+// Melacak tombol yang sedang ditekan (down) dan yang baru ditekan
+// (pressed, edge-triggered, dikonsumsi sekali per frame).
+
 export function createInput() {
-  const keys = new Set();
-  let mouseX = 0;
-  let mouseY = 0;
-  let mouseDown = false;
+  const down = new Set();
+  const pressedQueue = new Set();
+  let mouseDX = 0;
+  let mouseDY = 0;
   let wheelDelta = 0;
 
-  function onKeyDown(e) {
-    if (e.code === 'Tab') e.preventDefault();
-    keys.add(e.code);
-  }
-  function onKeyUp(e) { keys.delete(e.code); }
-  function onMouseMove(e) { mouseX = e.clientX; mouseY = e.clientY; }
-  function onMouseDown(e) { mouseDown = true; }
-  function onMouseUp(e) { mouseDown = false; }
-  function onWheel(e) { wheelDelta += e.deltaY; }
-
-  window.addEventListener('keydown', onKeyDown);
-  window.addEventListener('keyup', onKeyUp);
-  window.addEventListener('mousemove', onMouseMove);
-  window.addEventListener('mousedown', onMouseDown);
-  window.addEventListener('mouseup', onMouseUp);
-  window.addEventListener('wheel', onWheel);
+  window.addEventListener('keydown', (e) => {
+    if (e.repeat) return;
+    down.add(e.code);
+    pressedQueue.add(e.code);
+    if (['Space', 'Tab', 'ArrowUp', 'ArrowDown'].includes(e.code)) e.preventDefault();
+  });
+  window.addEventListener('keyup', (e) => {
+    down.delete(e.code);
+  });
+  window.addEventListener('blur', () => {
+    down.clear();
+    pressedQueue.clear();
+  });
+  window.addEventListener('mousemove', (e) => {
+    mouseDX += e.movementX || 0;
+    mouseDY += e.movementY || 0;
+  });
+  window.addEventListener('wheel', (e) => {
+    wheelDelta += e.deltaY;
+  }, { passive: true });
+  window.addEventListener('mousedown', (e) => {
+    if (e.button === 0) pressedQueue.add('MouseLeft');
+  });
 
   return {
-    isDown(code) { return keys.has(code); },
-    pressed(code) {
-      if (keys.has(code)) { keys.delete(code); return true; }
-      return false;
+    isDown(code) {
+      return down.has(code);
     },
-    get mouse() { return { x: mouseX, y: mouseY, down: mouseDown }; },
-    takeWheel() { const d = wheelDelta; wheelDelta = 0; return d; },
-    clear() { keys.clear(); },
+    pressed(code) {
+      return pressedQueue.has(code);
+    },
+    // Arah jalan: W/S maju-mundur, A/D kiri-kanan (relatif kamera).
+    moveAxes() {
+      const f = (down.has('KeyW') || down.has('ArrowUp') ? 1 : 0) - (down.has('KeyS') || down.has('ArrowDown') ? 1 : 0);
+      const s = (down.has('KeyD') ? 1 : 0) - (down.has('KeyA') ? 1 : 0);
+      return { f, s };
+    },
+    mouseDelta() {
+      const out = { dx: mouseDX, dy: mouseDY };
+      mouseDX = 0;
+      mouseDY = 0;
+      return out;
+    },
+    takeWheel() {
+      const w = wheelDelta;
+      wheelDelta = 0;
+      return w;
+    },
+    endFrame() {
+      pressedQueue.clear();
+    },
   };
 }

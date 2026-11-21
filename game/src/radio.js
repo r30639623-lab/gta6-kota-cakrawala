@@ -1,92 +1,110 @@
-// radio.js — 3 stasiun musik prosedural WebAudio.
-export const STATIONS = [
-  { name: 'Radio Cakrawala FM', desc: 'Dangdut koplo', scale: [0, 3, 5, 7, 10], base: 220, bpm: 132 },
-  { name: 'Pantai Chill 88.4', desc: 'Reggae santai', scale: [0, 2, 4, 7, 9], base: 196, bpm: 76 },
-  { name: 'Menara Rock 101.1', desc: 'Rock kota', scale: [0, 2, 3, 7, 8], base: 146, bpm: 120 },
+// radio.js — 3 stasiun musik prosedural WebAudio untuk Kota Cakrawala:
+// "Cakrawala FM" (pop ceria), "Senja 88" (lo-fi santai), "Dangdut Pantai"
+// (dangdut koplo). Melodi di-sequencer dengan oscillator, tanpa file audio.
+
+const STATIONS = [
+  {
+    name: 'Cakrawala FM',
+    bpm: 116,
+    wave: 'square',
+    bass: [55, 55, 65.4, 49],
+    lead: [220, 261.6, 329.6, 392, 329.6, 261.6, 220, 196],
+  },
+  {
+    name: 'Senja 88',
+    bpm: 76,
+    wave: 'sine',
+    bass: [65.4, 49, 55, 58.3],
+    lead: [261.6, 293.7, 329.6, 293.7, 261.6, 220, 196, 220],
+  },
+  {
+    name: 'Dangdut Pantai',
+    bpm: 132,
+    wave: 'triangle',
+    bass: [73.4, 73.4, 87.3, 65.4],
+    lead: [293.7, 329.6, 392, 440, 392, 349.2, 329.6, 293.7],
+  },
 ];
 
-export function createRadio(audio) {
-  let station = 0;
+export function createRadio() {
+  let ctx = null;
+  let master = null;
   let timer = null;
   let step = 0;
-  let ctx = null;
-  let gainNode = null;
+  let stationIndex = 0;
+  let playing = false;
 
-  function ensureCtx() {
-    if (ctx) return ctx;
+  function ensure() {
+    if (ctx) return true;
     try {
       const AC = window.AudioContext || window.webkitAudioContext;
-      if (!AC) return null;
+      if (!AC) return false;
       ctx = new AC();
-      gainNode = ctx.createGain();
-      gainNode.gain.value = 0.05;
-      gainNode.connect(ctx.destination);
-    } catch { return null; }
-    return ctx;
+      master = ctx.createGain();
+      master.gain.value = 0.12;
+      master.connect(ctx.destination);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
-  function noteFreq(st, degree) {
-    const scale = st.scale;
-    const oct = Math.floor(degree / scale.length);
-    const idx = ((degree % scale.length) + scale.length) % scale.length;
-    return st.base * Math.pow(2, oct + scale[idx] / 12);
-  }
-
-  function playStep() {
-    const c = ensureCtx();
-    if (!c || !gainNode) return;
-    const st = STATIONS[station];
-    const beat = 60 / st.bpm / 2;
+  function note(freq, dur, type, vol) {
+    if (!ctx || ctx.state === 'suspended') return;
     try {
-      if (c.state === 'suspended') c.resume().catch(() => {});
-      const mel = [0, 2, 1, 3, 4, 2, 0, 4];
-      const degree = mel[step % mel.length] + (step % 16 >= 12 ? 5 : 0);
-      const o = c.createOscillator();
-      o.type = station === 2 ? 'sawtooth' : 'triangle';
-      o.frequency.value = noteFreq(st, degree);
-      const g = c.createGain();
-      g.gain.setValueAtTime(0.5, c.currentTime);
-      g.gain.exponentialRampToValueAtTime(0.01, c.currentTime + beat * 0.9);
-      o.connect(g).connect(gainNode);
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = type;
+      o.frequency.value = freq;
+      g.gain.setValueAtTime(vol, ctx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + dur);
+      o.connect(g);
+      g.connect(master);
       o.start();
-      o.stop(c.currentTime + beat);
-      if (step % 2 === 0) {
-        const b = c.createOscillator();
-        b.type = 'sine';
-        b.frequency.value = st.base / 2;
-        const bg = c.createGain();
-        bg.gain.setValueAtTime(0.6, c.currentTime);
-        bg.gain.exponentialRampToValueAtTime(0.01, c.currentTime + beat);
-        b.connect(bg).connect(gainNode);
-        b.start();
-        b.stop(c.currentTime + beat);
-      }
-    } catch { /* abaikan */ }
+      o.stop(ctx.currentTime + dur + 0.02);
+    } catch {
+      // abaikan
+    }
+  }
+
+  function tick() {
+    const st = STATIONS[stationIndex];
+    const beat = 60 / st.bpm / 2;
+    const bar = step % 8;
+    note(st.bass[Math.floor(bar / 2)], beat * 1.8, 'sine', 0.2);
+    if (bar % 2 === 0) note(st.lead[bar], beat * 1.6, st.wave, 0.09);
+    if (bar === 4) note(st.lead[bar] * 2, beat, st.wave, 0.05);
     step++;
-  }
-
-  function start() {
-    ensureCtx();
-    if (timer) return;
-    const st = STATIONS[station];
-    timer = setInterval(playStep, (60 / st.bpm / 2) * 1000);
-  }
-
-  function stop() {
-    if (timer) { clearInterval(timer); timer = null; }
+    timer = setTimeout(tick, beat * 1000);
   }
 
   return {
-    get station() { return station; },
-    get name() { return STATIONS[station].name; },
-    next() {
-      station = (station + 1) % STATIONS.length;
-      stop();
-      start();
-      return STATIONS[station].name;
+    get station() {
+      return STATIONS[stationIndex].name;
     },
-    setStation(i) { station = i % STATIONS.length; stop(); start(); },
-    start,
-    stop,
+    get stations() {
+      return STATIONS.map((s) => s.name);
+    },
+    get playing() {
+      return playing;
+    },
+    start() {
+      if (playing) return;
+      if (!ensure()) return;
+      if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+      playing = true;
+      step = 0;
+      tick();
+    },
+    stop() {
+      playing = false;
+      if (timer) clearTimeout(timer);
+      timer = null;
+    },
+    next() {
+      stationIndex = (stationIndex + 1) % STATIONS.length;
+      step = 0;
+      return STATIONS[stationIndex].name;
+    },
   };
 }

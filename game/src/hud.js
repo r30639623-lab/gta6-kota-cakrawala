@@ -1,213 +1,219 @@
-// hud.js — HUD kaya: uang, nyawa, armor, Wanted, kecepatan, jam,
-// radio, tracker 12 misi, counter relik, distrik, minimap + kompas.
+// hud.js — HUD Kota Cakrawala: uang, nyawa, armor, Wanted, kecepatan,
+// jam, radio, tracker 12 misi, counter relik, distrik, minimap 2D
+// berlabel + kompas, banner, prompt konteks, dan layar menu/pause.
+
 import { MISSIONS, ACT_NAMES } from './missions.js';
-
-const WORLD = { minX: -310, maxX: 345, minZ: -310, maxZ: 345 };
-
-function toMap(x, z, size) {
-  const px = ((x - WORLD.minX) / (WORLD.maxX - WORLD.minX)) * size;
-  const pz = ((z - WORLD.minZ) / (WORLD.maxZ - WORLD.minZ)) * size;
-  return [px, pz];
-}
 
 export function createHud() {
   const el = (id) => document.getElementById(id);
   const moneyEl = el('hud-money');
   const healthFill = el('hud-health-fill');
-  const healthNum = el('hud-health-num');
   const armorFill = el('hud-armor-fill');
   const starsEl = el('hud-stars');
   const speedEl = el('hud-speed');
   const clockEl = el('hud-clock');
   const radioEl = el('hud-radio');
+  const trackerEl = el('hud-tracker-list');
+  const bannerEl = el('hud-banner');
+  const promptEl = el('hud-prompt');
   const relicsEl = el('hud-relics');
   const districtEl = el('hud-district');
-  const trackerEl = el('hud-tracker-list');
-  const actEl = el('hud-act-name');
-  const bannerEl = el('hud-banner');
-  const missionBarEl = el('hud-missionbar');
-  const promptEl = el('hud-prompt');
   const compassEl = el('hud-compass');
-  const mapCanvas = el('hud-minimap');
-  const mapCtx = mapCanvas.getContext('2d');
+  const minimap = el('hud-minimap');
+  const mapCtx = minimap.getContext('2d');
+  const menuOverlay = el('menu-overlay');
   const menuProgress = el('menu-progress');
   const menuRep = el('menu-rep');
+  let bannerTimer = null;
 
-  let bannerTimer = 0;
+  function stars(n) {
+    let s = '';
+    for (let i = 0; i < 5; i++) s += i < n ? '★' : '☆';
+    return s;
+  }
 
-  function showBanner(text, seconds = 3.5) {
+  function showBanner(text, ms = 2600) {
     bannerEl.textContent = text;
-    bannerEl.style.display = 'block';
-    bannerTimer = seconds;
+    bannerEl.style.opacity = '1';
+    if (bannerTimer) clearTimeout(bannerTimer);
+    bannerTimer = setTimeout(() => {
+      bannerEl.style.opacity = '0';
+    }, ms);
+  }
+
+  function setPrompt(text) {
+    promptEl.textContent = text || '';
+  }
+
+  function fmtTime(sec) {
+    const m = Math.floor(sec / 60);
+    const s = Math.floor(sec % 60);
+    return `${m}:${s.toString().padStart(2, '0')}`;
   }
 
   function drawMinimap(snap) {
-    const S = 190;
-    mapCtx.clearRect(0, 0, S, S);
-    mapCtx.fillStyle = '#16283d';
-    mapCtx.fillRect(0, 0, S, S);
-    // Laut & pantai (selatan)
-    mapCtx.fillStyle = '#1e6f9e';
-    const [, seaY] = toMap(0, 345, S);
-    mapCtx.fillRect(0, toMap(0, 300, S)[1], S, S);
-    mapCtx.fillStyle = '#e8d49a';
-    mapCtx.fillRect(0, toMap(0, 295, S)[1], S, 6);
-    // Jalan grid
-    mapCtx.strokeStyle = '#3a4552';
-    mapCtx.lineWidth = 4;
-    for (let gx = -240; gx <= 320; gx += 80) {
-      const [px] = toMap(gx, 0, S);
-      mapCtx.beginPath(); mapCtx.moveTo(px, 0); mapCtx.lineTo(px, S); mapCtx.stroke();
-    }
-    for (let gz = -240; gz <= 280; gz += 80) {
-      const [, pz] = toMap(0, gz, S);
-      mapCtx.beginPath(); mapCtx.moveTo(0, pz); mapCtx.lineTo(S, pz); mapCtx.stroke();
-    }
-    // Label distrik
-    mapCtx.font = 'bold 10px Arial';
-    mapCtx.fillStyle = 'rgba(255,255,255,0.55)';
-    const districtLabels = [
-      ['Pusat', 0, -30], ['Pasar', -120, 60], ['Pelabuhan', 250, 360],
-      ['Pantai', 0, 318], ['Bengkel', -222, 252],
-    ];
-    for (const [name, x, z] of districtLabels) {
-      const [px, pz] = toMap(x, z, S);
-      mapCtx.fillText(name, px - 14, pz - 12);
-    }
-    // Landmark
-    const marks = [
-      ['▲ Menara', snap.landmarks.menara, '#ffd23d'],
-      ['■ Pasar', snap.landmarks.pasar, '#ff8ac2'],
-      ['✚ RS', snap.landmarks.rs, '#ffffff'],
-      ['⚒ Bengkel', snap.landmarks.bengkel, '#7dff9b'],
-      ['⚓ Dermaga', snap.landmarks.dermaga, '#7fb0ff'],
-    ];
-    mapCtx.font = '10px Arial';
-    for (const [label, lm, color] of marks) {
-      const [px, pz] = toMap(lm.x, lm.z, S);
-      mapCtx.fillStyle = color;
-      mapCtx.beginPath(); mapCtx.arc(px, pz, 4, 0, Math.PI * 2); mapCtx.fill();
-      mapCtx.fillText(label, px + 6, pz + 3);
-    }
-    // Garasi (G)
-    if (snap.garages) {
-      for (const g of snap.garages) {
-        const [px, pz] = toMap(g.x, g.z, S);
-        mapCtx.fillStyle = '#7dff9b';
-        mapCtx.font = 'bold 11px Arial';
-        mapCtx.fillText('G', px - 3, pz + 4);
-      }
-    }
-    // Relik yang belum diambil
-    if (snap.relicPositions) {
-      mapCtx.fillStyle = '#ffd23d';
-      for (const r of snap.relicPositions) {
-        const [px, pz] = toMap(r.x, r.z, S);
-        mapCtx.beginPath(); mapCtx.arc(px, pz, 1.8, 0, Math.PI * 2); mapCtx.fill();
-      }
-    }
-    // Target misi
-    if (snap.missionTarget) {
-      const [px, pz] = toMap(snap.missionTarget.x, snap.missionTarget.z, S);
-      mapCtx.strokeStyle = '#ffd23d';
-      mapCtx.lineWidth = 2;
-      mapCtx.beginPath(); mapCtx.arc(px, pz, 8, 0, Math.PI * 2); mapCtx.stroke();
-      mapCtx.fillStyle = '#ffd23d';
-      mapCtx.beginPath(); mapCtx.arc(px, pz, 3, 0, Math.PI * 2); mapCtx.fill();
-    }
-    // Mobil lalu lintas (abu-abu), polisi (biru), heli (merah)
-    if (snap.trafficCars) {
-      mapCtx.fillStyle = '#9aa5b1';
-      for (const c of snap.trafficCars) {
-        const [px, pz] = toMap(c.pos.x, c.pos.z, S);
-        mapCtx.fillRect(px - 1.5, pz - 1.5, 3, 3);
-      }
-    }
-    if (snap.policeCars) {
-      mapCtx.fillStyle = '#3d7bff';
-      for (const c of snap.policeCars) {
-        if (!c.active) continue;
-        const [px, pz] = toMap(c.pos.x, c.pos.z, S);
-        mapCtx.beginPath(); mapCtx.arc(px, pz, 3.5, 0, Math.PI * 2); mapCtx.fill();
-      }
-    }
-    if (snap.heli && snap.heli.visible) {
-      const [px, pz] = toMap(snap.heli.position.x, snap.heli.position.z, S);
-      mapCtx.fillStyle = '#ff3b30';
-      mapCtx.font = 'bold 12px Arial';
-      mapCtx.fillText('H', px - 4, pz + 4);
-    }
-    // Pemain (panah kuning)
-    if (snap.playerPos) {
-      const [px, pz] = toMap(snap.playerPos.x, snap.playerPos.z, S);
-      mapCtx.save();
-      mapCtx.translate(px, pz);
-      mapCtx.rotate(Math.PI - (snap.heading || 0));
-      mapCtx.fillStyle = '#ffd23d';
+    const W = 190;
+    const H = 190;
+    const scale = W / 680;
+    const toMap = (x, z) => [95 + x * scale, 95 + z * scale];
+    mapCtx.fillStyle = 'rgba(10,16,10,0.82)';
+    mapCtx.fillRect(0, 0, W, H);
+    // Laut & pantai.
+    mapCtx.fillStyle = '#1e6f8e';
+    mapCtx.fillRect(0, toMap(0, 300)[1], W, H - toMap(0, 300)[1]);
+    mapCtx.fillStyle = '#d9c28a';
+    mapCtx.fillRect(0, toMap(0, 290)[1], W, toMap(0, 300)[1] - toMap(0, 290)[1]);
+    // Jalan.
+    mapCtx.strokeStyle = '#5a6068';
+    mapCtx.lineWidth = 3;
+    for (const s of [-280, -200, -120, -40, 40, 120, 200, 280]) {
+      const [x1] = toMap(s, 0);
       mapCtx.beginPath();
-      mapCtx.moveTo(0, -7); mapCtx.lineTo(5, 5); mapCtx.lineTo(-5, 5); mapCtx.closePath();
-      mapCtx.fill();
-      mapCtx.restore();
+      mapCtx.moveTo(x1, 0);
+      mapCtx.lineTo(x1, H);
+      mapCtx.stroke();
+      const [, y1] = toMap(0, s);
+      mapCtx.beginPath();
+      mapCtx.moveTo(0, y1);
+      mapCtx.lineTo(W, y1);
+      mapCtx.stroke();
     }
+    // Label distrik.
+    mapCtx.fillStyle = 'rgba(255,255,255,0.55)';
+    mapCtx.font = '9px sans-serif';
+    mapCtx.textAlign = 'center';
+    for (const [name, x, z] of [
+      ['Pusat', 0, -30],
+      ['Pasar', -120, 60],
+      ['Pelabuhan', 250, 330],
+      ['Pantai', 0, 318],
+      ['Bengkel', -222, 252],
+    ]) {
+      const [mx, my] = toMap(x, z);
+      mapCtx.fillText(name, mx, my - 8);
+    }
+    // Landmark.
+    const drawDot = (x, z, color, r = 3) => {
+      const [mx, my] = toMap(x, z);
+      mapCtx.fillStyle = color;
+      mapCtx.beginPath();
+      mapCtx.arc(mx, my, r, 0, Math.PI * 2);
+      mapCtx.fill();
+    };
+    drawDot(0, -30, '#ffd23f', 4); // Menara
+    drawDot(-120, 60, '#ff7fa8'); // Pasar
+    drawDot(120, -120, '#ffffff'); // RS
+    drawDot(-222, 252, '#2ec4b6'); // Bengkel
+    drawDot(250, 360, '#ff9e57'); // Dermaga
+    // Garasi (G).
+    mapCtx.fillStyle = '#2ee6ff';
+    mapCtx.font = 'bold 10px sans-serif';
+    for (const g of snap.garages || []) {
+      const [mx, my] = toMap(g.x, g.z);
+      mapCtx.fillText('G', mx, my + 3);
+    }
+    // Relik yang belum diambil (titik emas kecil).
+    if (snap.relicDots) {
+      mapCtx.fillStyle = '#ffd23f';
+      for (const [x, z] of snap.relicDots) {
+        const [mx, my] = toMap(x, z);
+        mapCtx.fillRect(mx - 1, my - 1, 2, 2);
+      }
+    }
+    // Target misi (cincin kuning berdenyut).
+    if (snap.missionTarget) {
+      const [mx, my] = toMap(snap.missionTarget.x, snap.missionTarget.z);
+      mapCtx.strokeStyle = '#ffd23f';
+      mapCtx.lineWidth = 2;
+      mapCtx.beginPath();
+      mapCtx.arc(mx, my, 7 + Math.sin(performance.now() / 300) * 2, 0, Math.PI * 2);
+      mapCtx.stroke();
+    }
+    // Polisi (titik biru) & helikopter (B).
+    mapCtx.fillStyle = '#4488ff';
+    for (const c of snap.policeCars || []) {
+      const [mx, my] = toMap(c.x, c.z);
+      mapCtx.beginPath();
+      mapCtx.arc(mx, my, 2.5, 0, Math.PI * 2);
+      mapCtx.fill();
+    }
+    if (snap.heli) {
+      const [mx, my] = toMap(snap.heli.x, snap.heli.z);
+      mapCtx.fillStyle = '#ff4444';
+      mapCtx.font = 'bold 11px sans-serif';
+      mapCtx.fillText('H', mx, my + 4);
+    }
+    // Pemain (panah putih).
+    const [px, py] = toMap(snap.playerPos.x, snap.playerPos.z);
+    mapCtx.save();
+    mapCtx.translate(px, py);
+    mapCtx.rotate(snap.heading);
+    mapCtx.fillStyle = '#ffffff';
+    mapCtx.beginPath();
+    mapCtx.moveTo(0, -6);
+    mapCtx.lineTo(4.5, 5);
+    mapCtx.lineTo(-4.5, 5);
+    mapCtx.closePath();
+    mapCtx.fill();
+    mapCtx.restore();
+    // Batas pandang minimap.
+    mapCtx.strokeStyle = 'rgba(255,255,255,0.35)';
+    mapCtx.lineWidth = 1;
+    mapCtx.strokeRect(0.5, 0.5, W - 1, H - 1);
+  }
+
+  function compass(deg) {
+    const dirs = ['U', 'TL', 'T', 'TG', 'S', 'BD', 'B', 'BL'];
+    const idx = Math.round((((deg % 360) + 360) % 360) / 45) % 8;
+    return dirs[idx];
   }
 
   return {
     showBanner,
+    setPrompt,
     update(dt, snap) {
-      if (bannerTimer > 0) {
-        bannerTimer -= dt;
-        if (bannerTimer <= 0) bannerEl.style.display = 'none';
-      }
       moneyEl.textContent = `$${snap.money}`;
-      healthFill.style.width = `${Math.max(0, snap.health)}%`;
-      healthNum.textContent = `${Math.round(snap.health)}`;
-      armorFill.style.width = `${Math.max(0, snap.armor)}%`;
-      const filled = '★'.repeat(snap.wanted) + '☆'.repeat(5 - snap.wanted);
-      starsEl.textContent = filled;
-      starsEl.classList.toggle('hot', snap.wanted > 0);
-      speedEl.innerHTML = `${Math.round(snap.speedKmh)} <small>km/h</small>`;
-      clockEl.textContent = `🕔 ${snap.clockText}`;
-      radioEl.textContent = `📻 ${snap.radioStation}`;
+      healthFill.style.width = `${Math.max(0, Math.min(100, snap.health))}%`;
+      armorFill.style.width = `${Math.max(0, Math.min(100, snap.armor))}%`;
+      starsEl.textContent = stars(snap.wanted);
+      starsEl.style.color = snap.wanted > 0 ? '#ff4444' : '#dddddd';
+      speedEl.textContent = `${Math.round(snap.speedKmh)} km/h`;
+      clockEl.textContent = snap.clockText;
+      radioEl.textContent = `♪ ${snap.radioStation}`;
       relicsEl.textContent = `◆ Relik ${snap.relicsFound}/${snap.relicsTotal}`;
       districtEl.textContent = `Distrik: ${snap.districtName} ★ ${snap.districtRep}`;
-      const act = snap.currentAct || 1;
-      actEl.textContent = ACT_NAMES[act] || ACT_NAMES[1];
-      // Tracker 12 misi
+      compassEl.textContent = compass(snap.headingDeg);
+      // Tracker 12 misi.
       let html = '';
       for (const m of MISSIONS) {
         const done = snap.missionsDone.includes(m.id);
-        const active = snap.missionActiveId === m.id;
+        const active = snap.activeMissionId === m.id;
         const mark = done ? '✓' : active ? '►' : '○';
-        const cls = done ? 'done' : active ? 'active' : '';
-        html += `<li class="${cls}">${mark} ${m.name} — $${m.reward}</li>`;
+        html += `<div class="tracker-row${active ? ' active' : ''}${done ? ' done' : ''}">${mark} ${m.name} — $${m.reward}</div>`;
       }
       trackerEl.innerHTML = html;
-      if (snap.missionActive) {
-        missionBarEl.style.display = 'block';
-        missionBarEl.textContent = `🎯 ${snap.missionActive.def.name} — ${Math.ceil(snap.missionTimer)} dtk • $${snap.missionActive.def.reward}`;
-      } else {
-        missionBarEl.style.display = 'none';
-      }
-      if (snap.prompt) {
-        promptEl.style.display = 'block';
-        promptEl.textContent = snap.prompt;
-      } else {
-        promptEl.style.display = 'none';
-      }
-      const deg = ((snap.headingDeg || 0) % 360 + 360) % 360;
-      const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
-      const dirName = dirs[Math.round(deg / 45) % 8];
-      compassEl.textContent = `${dirName} ↑ ${String(Math.round(deg)).padStart(3, '0')}°`;
       drawMinimap(snap);
-      // Menu
-      menuProgress.textContent = `${snap.missionsDone.length}/12 misi • Babak ${act} • Relik ${snap.relicsFound}/${snap.relicsTotal} • $${snap.money}`;
-      if (snap.districtList) {
-        let repHtml = '';
-        for (const d of snap.districtList) {
-          repHtml += `<div class="rrow"><span>${d.name}</span><div class="bar"><div style="width:${d.rep}%"></div></div><b>${d.rep}</b></div>`;
-        }
-        menuRep.innerHTML = repHtml;
+    },
+    updateMissionBanner(active, timer) {
+      if (!active) return;
+      const banner = el('hud-mission');
+      if (banner) banner.textContent = `${active.def.name} — ${fmtTime(timer)}`;
+    },
+    showMenu(save, districts, act) {
+      menuOverlay.style.display = 'flex';
+      menuProgress.textContent =
+        `${save.missionsDone.length}/12 misi • ${ACT_NAMES[act]} • ◆ Relik ${save.relicsFound.length}/20 • $${save.money}`;
+      let repHtml = '';
+      for (const d of districts.list()) {
+        repHtml += `<div class="rep-row"><span>${d.name}</span><div class="rep-bar"><div class="rep-fill" style="width:${d.rep}%"></div></div><span>${d.rep}</span></div>`;
       }
+      menuRep.innerHTML = repHtml;
+    },
+    hideMenu() {
+      menuOverlay.style.display = 'none';
+    },
+    showPause(show) {
+      el('pause-overlay').style.display = show ? 'flex' : 'none';
     },
   };
 }
