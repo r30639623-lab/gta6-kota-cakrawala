@@ -1,6 +1,7 @@
-// traffic.js — Lalu lintas Kota Cakrawala: 18 mobil AI di jalan grid
-// dan 30 pejalan kaki di trotoar. Mobil AI mengikuti jalur jalan,
-// berhenti di persimpangan secara acak, pejalan kaki berbelok acak.
+// traffic.js — Lalu lintas Kota Cakrawala: 28 mobil AI di jalan grid
+// (4 taksi kuning) dan 64 pejalan kaki di trotoar, lebih padat di
+// sekitar Pasar & Pantai. Mobil AI mengikuti jalur jalan, berhenti di
+// persimpangan secara acak, pejalan kaki berbelok acak.
 
 import * as THREE from 'three';
 import { makeCarMesh, CARS } from './vehicles.js';
@@ -11,8 +12,8 @@ function pick(arr, rng) {
   return arr[Math.floor(rng() * arr.length)];
 }
 
-export function createTraffic(scene, colliders, seed = 2) {
-  let s = seed * 2654435761 >>> 0;
+export function createTraffic(scene, colliders, seed = 4) {
+  let s = (seed * 2654435761) >>> 0;
   const rng = () => {
     s = (s + 0x6d2b79f5) | 0;
     let t = Math.imul(s ^ (s >>> 15), 1 | s);
@@ -22,20 +23,20 @@ export function createTraffic(scene, colliders, seed = 2) {
 
   const cars = [];
   const palette = [0xc0c0c0, 0x808080, 0x8a2be2, 0x20b2aa, 0xff8c00, 0x4682b4];
-  for (let i = 0; i < 18; i++) {
-    const def = pick(CARS, rng);
+  for (let i = 0; i < 28; i++) {
+    const def = i < 4 ? CARS.find((c) => c.id === 'taksi') : pick(CARS, rng);
     const mesh = makeCarMesh(def, Math.floor(rng() * 8));
     mesh.traverse((o) => {
       if (o.isMesh) o.castShadow = false;
     });
-    // Cat ulang bodi dengan warna lalu lintas acak.
-    mesh.userData.bodyMat.color.setHex(pick(palette, rng));
+    // Cat ulang bodi dengan warna lalu lintas acak (taksi tetap kuning).
+    if (i >= 4) mesh.userData.bodyMat.color.setHex(pick(palette, rng));
     scene.add(mesh);
     const horizontal = rng() < 0.5;
     const street = pick(STREETS, rng);
     const along = -300 + rng() * 600;
-    const lane = (rng() < 0.5 ? 3.5 : -3.5);
-    const car = {
+    const lane = rng() < 0.5 ? 3.5 : -3.5;
+    cars.push({
       mesh,
       horizontal,
       street,
@@ -44,13 +45,12 @@ export function createTraffic(scene, colliders, seed = 2) {
       speed: 7 + rng() * 6,
       dir: rng() < 0.5 ? 1 : -1,
       pause: 0,
-    };
-    cars.push(car);
+    });
   }
 
   const peds = [];
   const pedColors = [0xe84a5f, 0x2ec4b6, 0xffbf69, 0x7b5ea7, 0x4a6b8a, 0xd8d8d8];
-  for (let i = 0; i < 30; i++) {
+  for (let i = 0; i < 64; i++) {
     const g = new THREE.Group();
     const mat = new THREE.MeshLambertMaterial({ color: pick(pedColors, rng) });
     const body = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.9, 0.35), mat);
@@ -63,14 +63,39 @@ export function createTraffic(scene, colliders, seed = 2) {
     legs.position.y = 0.35;
     g.add(legs);
     scene.add(g);
+    // 40% pejalan kaki berkumpul di Pasar & Pantai (kota terasa ramai).
+    let x;
+    let z;
+    if (rng() < 0.4) {
+      if (rng() < 0.5) {
+        x = -160 + rng() * 90;
+        z = 20 + rng() * 90;
+      } else {
+        x = -160 + rng() * 320;
+        z = 296 + rng() * 36;
+      }
+    } else {
+      x = (rng() - 0.5) * 560;
+      z = (rng() - 0.5) * 560;
+    }
     peds.push({
       mesh: g,
-      x: (rng() - 0.5) * 560,
-      z: (rng() - 0.5) * 560,
+      x,
+      z,
       heading: rng() * Math.PI * 2,
       speed: 1 + rng() * 1.2,
       turnIn: 2 + rng() * 4,
     });
+  }
+
+  // Pindahkan pejalan kaki di sekitar (x,z) ke pantai (untuk staging shot).
+  function scatterPeds(x, z, r) {
+    for (const p of peds) {
+      if (Math.hypot(p.x - x, p.z - z) < r) {
+        p.x = -280 + Math.random() * 560;
+        p.z = 318 + Math.random() * 12;
+      }
+    }
   }
 
   function update(dt, playerPos) {
@@ -81,7 +106,6 @@ export function createTraffic(scene, colliders, seed = 2) {
         c.along += c.speed * c.dir * dt;
         if (c.along > 310) c.along = -310;
         if (c.along < -310) c.along = 310;
-        // Berhenti sejenak di persimpangan secara acak.
         if (Math.abs(c.along % 80) < 2 && rng() < 0.004) c.pause = 1 + rng() * 2;
       }
       const x = c.horizontal ? c.along : c.street + c.lane;
@@ -105,7 +129,6 @@ export function createTraffic(scene, colliders, seed = 2) {
     }
   }
 
-  // Mobil AI terdekat dari sebuah titik (untuk curi mobil / tabrakan).
   function nearestCar(x, z, maxDist) {
     let best = null;
     let bestD = maxDist;
@@ -133,14 +156,4 @@ export function createTraffic(scene, colliders, seed = 2) {
   }
 
   return { cars, peds, update, nearestCar, nearestPed, scatterPeds };
-
-  // Pindahkan pejalan kaki di sekitar (x,z) ke pantai (untuk staging).
-  function scatterPeds(x, z, r) {
-    for (const p of peds) {
-      if (Math.hypot(p.x - x, p.z - z) < r) {
-        p.x = -280 + Math.random() * 560;
-        p.z = 318 + Math.random() * 12;
-      }
-    }
-  }
 }

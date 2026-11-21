@@ -1,5 +1,5 @@
-// collectibles.js — 20 "Relik Cakrawala": octahedron emas melayang &
-// berputar di titik tetap kota (4 Menara, 4 Pasar, 4 Pelabuhan,
+// collectibles.js — 20 "Relik Cakrawala": octahedron emas melayang
+// & berputar di titik tetap kota (4 Menara, 4 Pasar, 4 Pelabuhan,
 // 4 Pantai, 4 Bengkel/RS). Diambil dalam radius 3,5 m: +$50,
 // +5 reputasi distrik setempat, bunyi cash. Semua 20 = bonus $500.
 
@@ -46,6 +46,7 @@ export function createCollectibles(scene, save, audio, onEvent) {
     meshes.set(r.id, m);
   }
   let t = 0;
+
   return {
     get found() {
       return [...save.relicsFound];

@@ -1,22 +1,23 @@
 // missions.js — 12 misi Bu Sari dalam 3 babak (total hadiah $6.850).
-// Tiap misi: target landmark + timer + reward + efek Wanted. Beacon
-// kuning (pilar + cincin) menandai target di dunia & minimap.
+// Tiap misi: target landmark + timer + reward + efek Wanted + dialog
+// Bu Sari saat mulai & selesai. Beacon kuning (pilar + cincin berdenyut)
+// menandai target di dunia & di minimap.
 
 import * as THREE from 'three';
 
 export const MISSIONS = [
-  { id: 'm1', act: 1, name: 'Antar Paket Bu Sari', reward: 150, time: 150, target: 'pasar', wanted: 0, night: false },
-  { id: 'm2', act: 1, name: 'Kabur Paket Panas', reward: 250, time: 180, target: 'menara', wanted: 2, night: false },
-  { id: 'm3', act: 1, name: 'Balapan Pulang', reward: 400, time: 120, target: 'bengkel', wanted: 0, night: false },
-  { id: 'm4', act: 1, name: 'Kejar-Kejaran Tengah Malam', reward: 500, time: 200, target: 'dermaga', wanted: 3, night: true },
-  { id: 'm5', act: 2, name: 'Antar Pasar Pagi Bu Sari', reward: 350, time: 150, target: 'pasar', wanted: 0, night: false },
-  { id: 'm6', act: 2, name: 'Balapan Menara', reward: 600, time: 130, target: 'menara', wanted: 0, night: false },
-  { id: 'm7', act: 2, name: 'Penyelamatan di Pantai', reward: 550, time: 170, target: 'pantai', wanted: 0, night: false },
-  { id: 'm8', act: 2, name: 'Utang Setengah Lunas', reward: 750, time: 220, target: 'dermaga', wanted: 3, night: false },
-  { id: 'm9', act: 3, name: 'Kurir Fajar', reward: 650, time: 160, target: 'pasar', wanted: 0, night: false },
-  { id: 'm10', act: 3, name: 'Balapan Terakhir Menara', reward: 800, time: 140, target: 'menara', wanted: 0, night: false },
-  { id: 'm11', act: 3, name: 'Penyelamatan Dermaga', reward: 700, time: 180, target: 'dermaga', wanted: 4, night: false },
-  { id: 'm12', act: 3, name: 'Final: Legenda Cakrawala', reward: 1200, time: 260, target: 'bengkel', wanted: 0, night: false },
+  { id: 'm1', act: 1, name: 'Antar Paket Bu Sari', reward: 150, time: 150, target: 'pasar', wanted: 0, night: false, line: 'Raka, antar paket ini ke Pasar. Jangan ngebut-ngebut, ya!', done: 'Bagus, Raka! Paket sampai. Kru bengkel bangga sama kamu.' },
+  { id: 'm2', act: 1, name: 'Kabur Paket Panas', reward: 250, time: 180, target: 'menara', wanted: 2, night: false, line: 'Paket ini panas, Nak. Polisi bakal ngejar — jangan sampai ketangkep!', done: 'Hebat! Kamu lolos dari mereka. Bu Sari tahu kamu bisa.' },
+  { id: 'm3', act: 1, name: 'Balapan Pulang', reward: 400, time: 120, target: 'bengkel', wanted: 0, night: false, line: 'Balapan pulang ke bengkel, Raka. Tunjukin kamu paling cepat di Cakrawala!', done: 'Itu baru pembalap! Bengkel ini butuh orang secepat kamu.' },
+  { id: 'm4', act: 1, name: 'Kejar-Kejaran Tengah Malam', reward: 500, time: 200, target: 'dermaga', wanted: 3, night: true, line: 'Malam ini kita main kucing-kucingan di Dermaga. Hati-hati, ya.', done: 'Tengah malam pun kamu tak terkalahkan. Babak baru dimulai!' },
+  { id: 'm5', act: 2, name: 'Antar Pasar Pagi Bu Sari', reward: 350, time: 150, target: 'pasar', wanted: 0, night: false, line: 'Pagi-pagi antar ke Pasar lagi. Pelanggan sudah menunggu dari subuh.', done: 'Tepat waktu seperti biasa. Reputasi kita di Pasar makin naik.' },
+  { id: 'm6', act: 2, name: 'Balapan Menara', reward: 600, time: 130, target: 'menara', wanted: 0, night: false, line: 'Menara menanti. Kalahkan catatan waktumu sendiri, Raka!', done: 'Menara itu saksi: kamu pembalap tercepat di kota ini.' },
+  { id: 'm7', act: 2, name: 'Penyelamatan di Pantai', reward: 550, time: 170, target: 'pantai', wanted: 0, night: false, line: 'Ada yang butuh bantuan di Pantai. Cepat, Raka, sebelum ombak naik!', done: 'Kamu bukan cuma cepat — kamu juga baik hati. Itu yang penting.' },
+  { id: 'm8', act: 2, name: 'Utang Setengah Lunas', reward: 750, time: 220, target: 'dermaga', wanted: 3, night: false, line: 'Utang kita setengah lunas kalau ini berhasil. Polisi pasti ikut campur!', done: 'Setengah utang lunas! Tinggal separuh lagi menuju bebas.' },
+  { id: 'm9', act: 3, name: 'Kurir Fajar', reward: 650, time: 160, target: 'pasar', wanted: 0, night: false, line: 'Fajar baru naik, Raka. Antar ini ke Pasar sebelum kota bangun.', done: 'Kurir fajar tak pernah terlambat. Kamu legenda hidup.' },
+  { id: 'm10', act: 3, name: 'Balapan Terakhir Menara', reward: 800, time: 140, target: 'menara', wanted: 0, night: false, line: 'Balapan terakhir ke Menara. Semua mata tertuju padamu!', done: 'Tak ada yang bisa mengejarmu sekarang. Menara milikmu!' },
+  { id: 'm11', act: 3, name: 'Penyelamatan Dermaga', reward: 700, time: 180, target: 'dermaga', wanted: 4, night: false, line: 'Dermaga butuh kamu, dan polisi juga mengejarmu. Dua-duanya sekaligus!', done: 'Dermaga aman berkat kamu. Satu langkah lagi menuju legenda.' },
+  { id: 'm12', act: 3, name: 'Final: Legenda Cakrawala', reward: 1200, time: 260, target: 'bengkel', wanted: 0, night: false, line: 'Ini yang terakhir, Raka. Pulang ke bengkel sebagai legenda Cakrawala!', done: 'Kamu LEGENDA Cakrawala, Raka! Bengkel ini milikmu sekarang.' },
 ];
 
 export const ACT_NAMES = {
@@ -29,11 +30,11 @@ export function createMissions(scene, landmarks, save, audio, onEvent) {
   const beaconMat = new THREE.MeshBasicMaterial({
     color: 0xffd23f,
     transparent: true,
-    opacity: 0.22,
+    opacity: 0.1,
     side: THREE.DoubleSide,
     depthWrite: false,
   });
-  const beacon = new THREE.Mesh(new THREE.CylinderGeometry(4.5, 4.5, 90, 18, 1, true), beaconMat);
+  const beacon = new THREE.Mesh(new THREE.CylinderGeometry(2.0, 2.0, 50, 18, 1, true), beaconMat);
   beacon.visible = false;
   scene.add(beacon);
   const ringMat = new THREE.MeshBasicMaterial({ color: 0xffd23f, transparent: true, opacity: 0.85 });
@@ -71,7 +72,7 @@ export function createMissions(scene, landmarks, save, audio, onEvent) {
     timer = def.time;
     const tp = targetPosition();
     if (tp) {
-      beacon.position.set(tp.x, 45, tp.z);
+      beacon.position.set(tp.x, 25, tp.z);
       beacon.visible = true;
       ring.position.set(tp.x, 0.4, tp.z);
       ring.visible = true;
@@ -92,7 +93,7 @@ export function createMissions(scene, landmarks, save, audio, onEvent) {
     ring.visible = false;
   }
 
-  function update(dt, playerPos) {
+  function update(dt, playerPos, paused = false) {
     beaconT += dt;
     if (beacon.visible) {
       beacon.rotation.y += dt * 0.6;
@@ -100,7 +101,8 @@ export function createMissions(scene, landmarks, save, audio, onEvent) {
       ring.scale.setScalar(1 + Math.sin(beaconT * 2.5) * 0.12);
     }
     if (!active) return;
-    timer -= dt;
+    // Dialog terbuka: timer dijeda, tapi sampai di target tetap dihitung.
+    if (!paused) timer -= dt;
     const tp = targetPosition();
     if (tp && Math.hypot(playerPos.x - tp.x, playerPos.z - tp.z) < 9) {
       const def = active.def;
@@ -109,11 +111,9 @@ export function createMissions(scene, landmarks, save, audio, onEvent) {
       if (!save.missionsDone.includes(def.id)) save.missionsDone.push(def.id);
       nextIndex = save.missionsDone.length;
       if (onEvent) onEvent({ type: 'complete', def });
-      const newAct = currentAct();
       if (def.id === 'm4' && onEvent) onEvent({ type: 'act', act: 2 });
       if (def.id === 'm8' && onEvent) onEvent({ type: 'act', act: 3 });
       if (def.id === 'm12' && onEvent) onEvent({ type: 'legend' });
-      void newAct;
       return;
     }
     if (timer <= 0) {

@@ -1,6 +1,7 @@
-// vehicles.js — 10 mobil original Kota Cakrawala + mesh & pengemudi.
+// vehicles.js — 12 mobil original Kota Cakrawala + mesh & pengemudi.
 // Mobil dibuat dari kotak + silinder (low-poly); cat 8 warna; upgrade
-// Turbo (+30% top speed), Lapis Baja, Nitro (boost Shift).
+// Turbo (+30% top speed), Lapis Baja, Nitro (boost Shift). Taksi punya
+// papan kuning di atap; sport/supercar punya spoiler.
 
 import * as THREE from 'three';
 
@@ -14,6 +15,8 @@ export const CARS = [
   { id: 'kijang', name: 'Kijang Klasik', type: 'klasik', color: 0xe8e8e2, top: 32, price: 350, need: 0 },
   { id: 'macan', name: 'Macan Muscle', type: 'muscle', color: 0x1a1a1a, top: 40, price: 1000, need: 0 },
   { id: 'cendrawasih', name: 'Cendrawasih Convertible', type: 'convertible', color: 0xff7fa8, top: 39, price: 800, need: 0 },
+  { id: 'taksi', name: 'Taksi Cakrawala', type: 'taksi', color: 0xffc400, top: 35, price: 450, need: 0 },
+  { id: 'singa', name: 'Singa Muscle', type: 'muscle', color: 0xb03a2e, top: 41, price: 1100, need: 0 },
   { id: 'garuda', name: 'Garuda Supercar', type: 'supercar', color: 0xd4af37, top: 48, price: 2500, need: 8 },
 ];
 
@@ -50,7 +53,7 @@ export function makeCarMesh(def, paintIndex = 0) {
   g.add(body);
   if (!isPickup) {
     const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.62, isVan ? 3.4 : 2.2), glassMat);
-    cabin.position.set(0, 1.28, isVan ? -0.2 : -0.2);
+    cabin.position.set(0, 1.28, -0.2);
     cabin.castShadow = true;
     g.add(cabin);
   } else {
@@ -65,6 +68,11 @@ export function makeCarMesh(def, paintIndex = 0) {
     const spoiler = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.08, 0.5), bodyMat);
     spoiler.position.set(0, 1.05, -2.1);
     g.add(spoiler);
+  }
+  if (def.type === 'taksi') {
+    const sign = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.3, 0.5), new THREE.MeshBasicMaterial({ color: 0x111111 }));
+    sign.position.set(0, 1.75, 0.4);
+    g.add(sign);
   }
   for (const [x, z] of [[-0.95, 1.5], [0.95, 1.5], [-0.95, -1.5], [0.95, -1.5]]) {
     const w = new THREE.Mesh(wheelGeo, wheelMat);

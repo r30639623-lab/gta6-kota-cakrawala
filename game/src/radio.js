@@ -1,6 +1,7 @@
-// radio.js — 3 stasiun musik prosedural WebAudio untuk Kota Cakrawala:
-// "Cakrawala FM" (pop ceria), "Senja 88" (lo-fi santai), "Dangdut Pantai"
-// (dangdut koplo). Melodi di-sequencer dengan oscillator, tanpa file audio.
+// radio.js — 4 stasiun musik prosedural WebAudio Kota Cakrawala:
+// "Cakrawala FM" (pop ceria), "Senja 88" (lo-fi santai),
+// "Dangdut Pantai" (dangdut koplo), "Keroncong Senja" (keroncong tenang).
+// Melodi di-sequencer dengan oscillator, tanpa file audio.
 
 const STATIONS = [
   {
@@ -23,6 +24,13 @@ const STATIONS = [
     wave: 'triangle',
     bass: [73.4, 73.4, 87.3, 65.4],
     lead: [293.7, 329.6, 392, 440, 392, 349.2, 329.6, 293.7],
+  },
+  {
+    name: 'Keroncong Senja',
+    bpm: 96,
+    wave: 'sine',
+    bass: [65.4, 65.4, 49, 55],
+    lead: [329.6, 392, 440, 392, 329.6, 293.7, 261.6, 293.7],
   },
 ];
 

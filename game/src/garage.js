@@ -1,9 +1,9 @@
 // garage.js — Panel garasi Kota Cakrawala (tombol G di mana saja):
-// daftar 10 mobil (beli/pilih), upgrade Turbo/Lapis Baja/Nitro,
-// 8 warna cat, isi ulang amunisi $50, daftar 3 garasi.
+// daftar 12 mobil (beli/pilih), upgrade Turbo/Lapis Baja/Nitro,
+// 8 warna cat, isi ulang amunisi $50 (pistol/SMG/senapan), daftar 3 garasi.
 // Diskon 20% bila reputasi distrik saat ini >= 70.
 
-import { CARS, PAINTS, carDef } from './vehicles.js';
+import { CARS, PAINTS } from './vehicles.js';
 
 const UPGRADES = [
   { id: 'turbo', name: 'Mesin Turbo', desc: '+30% top speed', price: 400 },
@@ -71,7 +71,6 @@ export function createGarage(save, districts, api) {
       row.appendChild(btn);
       listEl.appendChild(row);
     }
-    // Upgrade.
     const upTitle = document.createElement('div');
     upTitle.className = 'garage-sub';
     upTitle.textContent = '— Upgrade —';
@@ -101,11 +100,10 @@ export function createGarage(save, districts, api) {
       row.appendChild(btn);
       listEl.appendChild(row);
     }
-    // Amunisi.
     const ammoRow = document.createElement('div');
     ammoRow.className = 'garage-row';
     const ammoLabel = document.createElement('span');
-    ammoLabel.textContent = `Amunisi — Pistol ${save.ammo.pistol} • SMG ${save.ammo.smg}`;
+    ammoLabel.textContent = `Amunisi — Pistol ${save.ammo.pistol} • SMG ${save.ammo.smg} • Senapan ${save.ammo.shotgun}`;
     ammoRow.appendChild(ammoLabel);
     const ammoBtn = document.createElement('button');
     ammoBtn.textContent = 'Isi ulang $50';
@@ -115,12 +113,12 @@ export function createGarage(save, districts, api) {
       save.money -= 50;
       save.ammo.pistol = 48;
       save.ammo.smg = 180;
+      save.ammo.shotgun = 24;
       if (api.onSave) api.onSave();
       render();
     };
     ammoRow.appendChild(ammoBtn);
     listEl.appendChild(ammoRow);
-    // Cat.
     paintsEl.innerHTML = '';
     PAINTS.forEach((p, i) => {
       const sw = document.createElement('button');

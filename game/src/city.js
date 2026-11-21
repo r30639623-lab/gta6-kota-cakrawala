@@ -1,7 +1,7 @@
 // city.js — Kota Cakrawala: kota pesisir prosedural (three.js).
-// Round 7: pencahayaan & bayangan diperbaiki (matahari berbayang PCF,
-// jendela menyala saat senja/malam, lampu jalan + neon, langit gradien,
-// kabut, laut, awan bergerak), gedung lebih bervariasi, marka jalan jelas.
+// Siang cerah jadi default (matahari terik, langit biru), fasad gedung
+// 8 warna cerah, palem di jalan & pantai, payung + kios pantai,
+// kru bengkel berdiri di depan Bu Sari, kios pasar lebih banyak.
 // Layout deterministik dari seed supaya screenshot stabil.
 
 import * as THREE from 'three';
@@ -33,11 +33,13 @@ const GARAGE_SPOTS = [
   { id: 'g3', name: 'Garasi Menara', x: 34, z: -62 },
 ];
 
-function facadeTextures(rng) {
-  // 4 varian fasad: canvas warna + canvas emissive (jendela menyala saja).
+const STREETS = [-280, -200, -120, -40, 40, 120, 200, 280];
+
+function makeFacadeSet(rng) {
+  // 8 varian fasad cerah: canvas warna + canvas emissive (jendela saja).
+  const bases = ['#5a6b7d', '#6d5a4e', '#4e5d6b', '#7d6a5a', '#c96f4a', '#4a7d7a', '#b89a4a', '#6a9a7a'];
   const variants = [];
-  const bases = ['#5a6b7d', '#6d5a4e', '#4e5d6b', '#7d6a5a'];
-  for (let v = 0; v < 4; v++) {
+  for (let v = 0; v < 8; v++) {
     const map = document.createElement('canvas');
     map.width = 128;
     map.height = 256;
@@ -71,7 +73,7 @@ function facadeTextures(rng) {
   return variants;
 }
 
-function skyTexture(top, mid, bottom) {
+function makeSkyGradient(top, mid, bottom) {
   const c = document.createElement('canvas');
   c.width = 4;
   c.height = 256;
@@ -87,27 +89,30 @@ function skyTexture(top, mid, bottom) {
   return tex;
 }
 
-export function buildCity(scene, seed = 2) {
+export function buildCity(scene, seed = 4) {
   const rng = mulberry32(seed * 7919 + 13);
   const group = new THREE.Group();
   group.name = 'kota';
   scene.add(group);
   const colliders = [];
   const addCollider = (x, z, hx, hz) => colliders.push({ x, z, hx, hz });
+  const nearLandmark = (x, z) =>
+    Object.values(LANDMARKS).some((lm) => Math.hypot(x - lm.x, z - lm.z) < 55);
+  const nearGarage = (x, z) => GARAGE_SPOTS.some((g) => Math.hypot(x - g.x, z - g.z) < 30);
 
-  // --- Langit: kubah gradien + awan + kabut ---
+  // --- Langit: kubah gradien + awan putih + kabut ---
   const sky = new THREE.Mesh(
     new THREE.SphereGeometry(900, 24, 16),
     new THREE.MeshBasicMaterial({ side: THREE.BackSide, fog: false })
   );
   sky.name = 'langit';
   group.add(sky);
-  const skyDay = skyTexture('#3f8fd2', '#9fc8e8', '#e8d9b0');
-  const skyDusk = skyTexture('#2c1e5e', '#c65a7a', '#ff9e57');
-  const skyNight = skyTexture('#050914', '#0d1b33', '#1c2b4a');
+  const skyDay = makeSkyGradient('#2f7fd0', '#8ec6ea', '#ffe9b8');
+  const skyDusk = makeSkyGradient('#2c1e5e', '#c65a7a', '#ff9e57');
+  const skyNight = makeSkyGradient('#050914', '#0d1b33', '#1c2b4a');
   const clouds = [];
-  const cloudMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.55, fog: false });
-  for (let i = 0; i < 9; i++) {
+  const cloudMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.7, fog: false });
+  for (let i = 0; i < 11; i++) {
     const cl = new THREE.Group();
     for (let j = 0; j < 3; j++) {
       const s = new THREE.Mesh(new THREE.SphereGeometry(14 + rng() * 16, 8, 6), cloudMat);
@@ -115,13 +120,13 @@ export function buildCity(scene, seed = 2) {
       s.scale.y = 0.35;
       cl.add(s);
     }
-    cl.position.set((rng() - 0.5) * 700, 150 + rng() * 60, (rng() - 0.5) * 700);
+    cl.position.set((rng() - 0.5) * 700, 130 + rng() * 50, (rng() - 0.5) * 700);
     group.add(cl);
     clouds.push(cl);
   }
 
   // --- Cahaya: matahari berbayang + hemisphere + lampu titik landmark ---
-  const sun = new THREE.DirectionalLight(0xffffff, 1.6);
+  const sun = new THREE.DirectionalLight(0xffffff, 2.2);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
   sun.shadow.camera.left = -360;
@@ -132,7 +137,7 @@ export function buildCity(scene, seed = 2) {
   sun.shadow.bias = -0.0006;
   group.add(sun);
   group.add(sun.target);
-  const hemi = new THREE.HemisphereLight(0xbfd9ff, 0x3a4a3a, 0.9);
+  const hemi = new THREE.HemisphereLight(0xbfd9ff, 0x3a4a3a, 1.1);
   group.add(hemi);
   const lampLights = [];
   for (const [x, z] of [[0, -30], [-120, 60], [120, -120], [-222, 252]]) {
@@ -143,8 +148,10 @@ export function buildCity(scene, seed = 2) {
   }
 
   // --- Tanah: rumput kota + pasir pantai + laut ---
-  const groundMat = new THREE.MeshLambertMaterial({ color: 0x4a5d43 });
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(760, 760), groundMat);
+  const ground = new THREE.Mesh(
+    new THREE.PlaneGeometry(760, 760),
+    new THREE.MeshLambertMaterial({ color: 0x4a5d43 })
+  );
   ground.rotation.x = -Math.PI / 2;
   ground.receiveShadow = true;
   group.add(ground);
@@ -175,15 +182,10 @@ export function buildCity(scene, seed = 2) {
   const roadMat = new THREE.MeshLambertMaterial({ color: 0x2e3138 });
   const dashMat = new THREE.MeshBasicMaterial({ color: 0xd8b13a });
   const zebraMat = new THREE.MeshBasicMaterial({ color: 0xe8e8e8 });
-  const streets = [-280, -200, -120, -40, 40, 120, 200, 280];
-  for (const s of streets) {
-    for (const [w, l, x, z, rot] of [
-      [14, 700, s, 0, 0],
-      [700, 14, 0, s, 0],
-    ]) {
+  for (const s of STREETS) {
+    for (const [w, l, x, z] of [[14, 700, s, 0], [700, 14, 0, s]]) {
       const r = new THREE.Mesh(new THREE.PlaneGeometry(w, l), roadMat);
       r.rotation.x = -Math.PI / 2;
-      r.rotation.z = rot;
       r.position.set(x, 0.08, z);
       r.receiveShadow = true;
       group.add(r);
@@ -196,8 +198,7 @@ export function buildCity(scene, seed = 2) {
       dash2.position.set(d, 0.12, s);
       group.add(dash2);
     }
-    // Zebra di tiap persimpangan jalan utama.
-    for (const t of streets) {
+    for (const t of STREETS) {
       for (let k = -2; k <= 2; k++) {
         const z1 = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.05, 4.5), zebraMat);
         z1.position.set(t + k * 2.6, 0.12, s + 8.5);
@@ -207,7 +208,7 @@ export function buildCity(scene, seed = 2) {
   }
 
   // --- Gedung: ~100 blok dengan fasad berjendela menyala ---
-  const facades = facadeTextures(rng);
+  const facades = makeFacadeSet(rng);
   const boxGeo = new THREE.BoxGeometry(1, 1, 1);
   const roofMat = new THREE.MeshLambertMaterial({ color: 0x3a3f46 });
   const blockCenters = [];
@@ -216,9 +217,6 @@ export function buildCity(scene, seed = 2) {
       blockCenters.push([bx, bz]);
     }
   }
-  const nearLandmark = (x, z) =>
-    Object.values(LANDMARKS).some((lm) => Math.hypot(x - lm.x, z - lm.z) < 55);
-  const nearGarage = (x, z) => GARAGE_SPOTS.some((g) => Math.hypot(x - g.x, z - g.z) < 30);
   let buildingCount = 0;
   for (const [bx, bz] of blockCenters) {
     if (bz > 260) continue; // zona pantai
@@ -249,7 +247,6 @@ export function buildCity(scene, seed = 2) {
       const roof = new THREE.Mesh(new THREE.BoxGeometry(w + 1, 0.8, d + 1), roofMat);
       roof.position.set(x, h + 0.4, z);
       group.add(roof);
-      // Antena kecil di sebagian gedung tinggi.
       if (h > 26 && rng() < 0.5) {
         const ant = new THREE.Mesh(
           new THREE.CylinderGeometry(0.25, 0.25, 6, 6),
@@ -264,8 +261,10 @@ export function buildCity(scene, seed = 2) {
   }
 
   // --- Menara Cakrawala (86 m) + lampu suar ---
-  const towerMat = new THREE.MeshLambertMaterial({ color: 0x8a94a6, emissive: 0x223344, emissiveIntensity: 0.4 });
-  const tower = new THREE.Mesh(new THREE.CylinderGeometry(9, 13, 86, 10), towerMat);
+  const tower = new THREE.Mesh(
+    new THREE.CylinderGeometry(9, 13, 86, 10),
+    new THREE.MeshLambertMaterial({ color: 0x8a94a6, emissive: 0x223344, emissiveIntensity: 0.4 })
+  );
   tower.position.set(0, 43, -30);
   tower.castShadow = true;
   group.add(tower);
@@ -302,19 +301,19 @@ export function buildCity(scene, seed = 2) {
   pasarRoof.rotation.y = Math.PI / 4;
   group.add(pasarRoof);
   const kioskColors = [0xe84a5f, 0x2ec4b6, 0xffbf69, 0x7b5ea7];
-  for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < 8; i++) {
     const k = new THREE.Mesh(
       new THREE.BoxGeometry(6, 3.4, 5),
       new THREE.MeshLambertMaterial({ color: kioskColors[i % 4] })
     );
-    k.position.set(-142 + (i % 3) * 22, 1.7, 84 + Math.floor(i / 3) * 10);
+    k.position.set(-146 + (i % 4) * 18, 1.7, 84 + Math.floor(i / 4) * 10);
     k.castShadow = true;
     group.add(k);
     addCollider(k.position.x, k.position.z, 3, 2.5);
   }
   addCollider(-120, 60, 23, 15);
 
-  // --- Rumah Sakit: gedung putih + helipad + palang merah ---
+  // --- Rumah Sakit: gedung putih + palang merah ---
   const rs = new THREE.Mesh(
     new THREE.BoxGeometry(40, 18, 26),
     new THREE.MeshLambertMaterial({ color: 0xe8e8e2 })
@@ -339,12 +338,15 @@ export function buildCity(scene, seed = 2) {
   bengkel.position.set(-222, 4, 252);
   bengkel.castShadow = true;
   group.add(bengkel);
-  const signMat = new THREE.MeshBasicMaterial({ color: 0xffd23f });
-  const sign = new THREE.Mesh(new THREE.BoxGeometry(24, 2.2, 0.5), signMat);
+  const sign = new THREE.Mesh(
+    new THREE.BoxGeometry(24, 2.2, 0.5),
+    new THREE.MeshBasicMaterial({ color: 0xffd23f })
+  );
   sign.position.set(-222, 9.2, 241.5);
   group.add(sign);
   addCollider(-222, 252, 15, 10);
-  // Bu Sari: sosok sederhana (gaun + kerudung) berdiri di depan bengkel.
+
+  // Bu Sari: sosok sederhana (gaun + kerudung) di depan bengkel.
   const buSari = new THREE.Group();
   const dress = new THREE.Mesh(
     new THREE.ConeGeometry(1.1, 2.6, 8),
@@ -370,6 +372,42 @@ export function buildCity(scene, seed = 2) {
     if (o.isMesh) o.castShadow = true;
   });
   group.add(buSari);
+
+  // Kru bengkel: Yoga (montir), Lia (supir), Bima (pengintai) di samping Bu Sari.
+  function crewFigure(shirtColor, capColor, x, z) {
+    const f = new THREE.Group();
+    const shirt = new THREE.MeshLambertMaterial({ color: shirtColor });
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.0, 0.4), shirt);
+    body.position.y = 1.3;
+    f.add(body);
+    const h = new THREE.Mesh(
+      new THREE.SphereGeometry(0.32, 10, 8),
+      new THREE.MeshLambertMaterial({ color: 0xe8b98a })
+    );
+    h.position.y = 2.1;
+    f.add(h);
+    const cap = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.34, 0.36, 0.14, 10),
+      new THREE.MeshLambertMaterial({ color: capColor })
+    );
+    cap.position.y = 2.34;
+    f.add(cap);
+    const legs = new THREE.Mesh(
+      new THREE.BoxGeometry(0.6, 0.8, 0.35),
+      new THREE.MeshLambertMaterial({ color: 0x2c3550 })
+    );
+    legs.position.y = 0.4;
+    f.add(legs);
+    f.position.set(x, 0, z);
+    f.traverse((o) => {
+      if (o.isMesh) o.castShadow = true;
+    });
+    group.add(f);
+    return f;
+  }
+  crewFigure(0x2e8b57, 0x333333, -244, 236);
+  crewFigure(0xff7fa8, 0xffd23f, -240, 240);
+  crewFigure(0x2471a3, 0x111111, -236, 236);
 
   // --- 3 Garasi: bangunan + papan "GARASI" ---
   const garages = [];
@@ -424,10 +462,66 @@ export function buildCity(scene, seed = 2) {
   const ship = new THREE.Group();
   const hull = new THREE.Mesh(
     new THREE.BoxGeometry(44, 7, 12),
-    new THREE.MeshLambertMaterial({ color: 0x273746 })
+    new THREE.MeshLambertMaterial({ color: 0x33506b })
   );
   hull.position.y = 1.5;
   ship.add(hull);
+  // Garis air merah di lambung supaya kapal tidak terbaca sebagai balok gelap.
+  const waterline = new THREE.Mesh(
+    new THREE.BoxGeometry(44.4, 1, 12.4),
+    new THREE.MeshLambertMaterial({ color: 0xc0392b })
+  );
+  waterline.position.y = 0.4;
+  ship.add(waterline);
+  // Dek putih di atas lambung + kontainer warna-warni di atas dek.
+  const deck = new THREE.Mesh(
+    new THREE.BoxGeometry(44.4, 0.6, 12.4),
+    new THREE.MeshLambertMaterial({ color: 0xe8e8e2 })
+  );
+  deck.position.y = 5.2;
+  ship.add(deck);
+  const shipContColors = [0xc0392b, 0x2471a3, 0xd4ac0d];
+  for (let i = 0; i < 3; i++) {
+    const sc = new THREE.Mesh(
+      new THREE.BoxGeometry(5.5, 3, 8),
+      new THREE.MeshLambertMaterial({ color: shipContColors[i] })
+    );
+    sc.position.set(-3 + i * 6.5, 7, 0);
+    sc.castShadow = true;
+    ship.add(sc);
+  }
+  // Cerobong + pita kuning, tiang dengan lampu putih, jendela kabin.
+  const funnel = new THREE.Mesh(
+    new THREE.CylinderGeometry(1.8, 2.2, 7, 10),
+    new THREE.MeshLambertMaterial({ color: 0x2c3550 })
+  );
+  funnel.position.set(18, 8.5, 0);
+  ship.add(funnel);
+  const funnelBand = new THREE.Mesh(
+    new THREE.CylinderGeometry(1.9, 1.9, 1.2, 10),
+    new THREE.MeshBasicMaterial({ color: 0xffd23f })
+  );
+  funnelBand.position.set(18, 11.2, 0);
+  ship.add(funnelBand);
+  const mast = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.25, 0.35, 10, 6),
+    new THREE.MeshLambertMaterial({ color: 0x8a6d3b })
+  );
+  mast.position.set(-20, 9, 0);
+  ship.add(mast);
+  const mastLight = new THREE.Mesh(
+    new THREE.SphereGeometry(0.7, 8, 6),
+    new THREE.MeshBasicMaterial({ color: 0xffffff })
+  );
+  mastLight.position.set(-20, 14.2, 0);
+  ship.add(mastLight);
+  // Lubang palka (porthole) di sisi lambung yang menghadap kamera.
+  const portMat = new THREE.MeshBasicMaterial({ color: 0xffe9a8 });
+  for (let i = 0; i < 6; i++) {
+    const ph = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.2, 0.2), portMat);
+    ph.position.set(-18 + i * 7, 2.2, -6.1);
+    ship.add(ph);
+  }
   const cabin = new THREE.Mesh(
     new THREE.BoxGeometry(10, 8, 10),
     new THREE.MeshLambertMaterial({ color: 0xe8e8e2 })
@@ -437,12 +531,34 @@ export function buildCity(scene, seed = 2) {
   ship.position.set(250, 0, 392);
   group.add(ship);
 
+  // --- Payung & kios di pantai ---
+  const umbrellaColors = [0xe84a5f, 0x2ec4b6, 0xffbf69, 0x7b5ea7];
+  for (let i = 0; i < 8; i++) {
+    const ux = -140 + i * 40;
+    const pole = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.12, 0.12, 3, 6),
+      new THREE.MeshLambertMaterial({ color: 0x8a6d3b })
+    );
+    pole.position.set(ux, 1.5, 322);
+    group.add(pole);
+    const top = new THREE.Mesh(
+      new THREE.ConeGeometry(3.4, 1.4, 8),
+      new THREE.MeshLambertMaterial({ color: umbrellaColors[i % 4] })
+    );
+    top.position.set(ux, 3.6, 322);
+    top.castShadow = true;
+    group.add(top);
+  }
+
   // --- Pohon palem di sepanjang pantai & jalan ---
   const trunkMat = new THREE.MeshLambertMaterial({ color: 0x6b4a2a });
   const leafMat = new THREE.MeshLambertMaterial({ color: 0x2e8b57 });
   const palmSpots = [];
-  for (let x = -300; x <= 300; x += 60) palmSpots.push([x + 8, 296]);
-  for (let i = 0; i < 14; i++) palmSpots.push([(rng() - 0.5) * 560, (rng() - 0.5) * 560]);
+  for (let x = -300; x <= 300; x += 50) palmSpots.push([x + 8, 296]);
+  for (const s of STREETS) {
+    palmSpots.push([s + 9, -120], [s + 9, 120]);
+  }
+  for (let i = 0; i < 16; i++) palmSpots.push([(rng() - 0.5) * 560, (rng() - 0.5) * 560]);
   for (const [x, z] of palmSpots) {
     if (nearLandmark(x, z)) continue;
     const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.55, 7, 6), trunkMat);
@@ -463,7 +579,7 @@ export function buildCity(scene, seed = 2) {
   const lampPoleMat = new THREE.MeshLambertMaterial({ color: 0x222222 });
   const lampBulbMat = new THREE.MeshBasicMaterial({ color: 0xffe9a8 });
   const lampBulbs = [];
-  for (const s of streets) {
+  for (const s of STREETS) {
     for (let d = -280; d <= 280; d += 80) {
       const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.22, 7, 6), lampPoleMat);
       pole.position.set(s + 8, 3.5, d);
@@ -476,14 +592,14 @@ export function buildCity(scene, seed = 2) {
   }
 
   // --- Neon: papan menyala di Pasar & Menara (hidup saat senja/malam) ---
-  const neonMat = new THREE.MeshBasicMaterial({ color: 0xff2e9a });
-  const neonMat2 = new THREE.MeshBasicMaterial({ color: 0x2ee6ff });
+  const neonPink = new THREE.MeshBasicMaterial({ color: 0xff2e9a });
+  const neonCyan = new THREE.MeshBasicMaterial({ color: 0x2ee6ff });
   const neons = [];
-  const n1 = new THREE.Mesh(new THREE.BoxGeometry(20, 2.4, 0.5), neonMat);
+  const n1 = new THREE.Mesh(new THREE.BoxGeometry(20, 2.4, 0.5), neonPink);
   n1.position.set(-120, 11.5, 44.6);
   group.add(n1);
   neons.push(n1);
-  const n2 = new THREE.Mesh(new THREE.BoxGeometry(2.4, 16, 0.5), neonMat2);
+  const n2 = new THREE.Mesh(new THREE.BoxGeometry(2.4, 16, 0.5), neonCyan);
   n2.position.set(10.5, 60, -30);
   group.add(n2);
   neons.push(n2);
@@ -493,22 +609,21 @@ export function buildCity(scene, seed = 2) {
   group.traverse((o) => {
     if (o.isMesh && o.userData.windowMat) windowMats.push(o.userData.windowMat);
   });
-  let timeOfDay = 'dusk';
+  let timeOfDay = 'day';
   function setTimeOfDay(name) {
     timeOfDay = name;
     if (name === 'day') {
       sun.color.set(0xfff2d8);
-      sun.intensity = 2.2;
+      sun.intensity = 2.6;
       sun.position.set(180, 260, 120);
-      hemi.intensity = 1.1;
+      hemi.intensity = 1.2;
       sky.material.map = skyDay;
       scene.fog = new THREE.Fog(0xcfe0ea, 320, 850);
       for (const m of windowMats) m.emissiveIntensity = 0.06;
       for (const p of lampLights) p.intensity = 0;
-      for (const b of lampBulbs) b.material = lampBulbMat;
       for (const n of neons) n.visible = false;
       beaconLight.intensity = 0;
-      cloudMat.opacity = 0.6;
+      cloudMat.opacity = 0.7;
     } else if (name === 'night') {
       sun.color.set(0x8fa8ff);
       sun.intensity = 0.55;
@@ -520,7 +635,7 @@ export function buildCity(scene, seed = 2) {
       for (const p of lampLights) p.intensity = 60;
       for (const n of neons) n.visible = true;
       beaconLight.intensity = 90;
-      cloudMat.opacity = 0.22;
+      cloudMat.opacity = 0.25;
     } else {
       // senja — default Kota Cakrawala
       sun.color.set(0xff9e57);
@@ -533,11 +648,11 @@ export function buildCity(scene, seed = 2) {
       for (const p of lampLights) p.intensity = 40;
       for (const n of neons) n.visible = true;
       beaconLight.intensity = 55;
-      cloudMat.opacity = 0.4;
+      cloudMat.opacity = 0.45;
     }
     sky.material.needsUpdate = true;
   }
-  setTimeOfDay('dusk');
+  setTimeOfDay('day');
 
   function districtAt(x, z) {
     let best = null;
@@ -571,7 +686,7 @@ export function buildCity(scene, seed = 2) {
         clouds[i].position.x += dt * (1.2 + i * 0.12);
         if (clouds[i].position.x > 420) clouds[i].position.x = -420;
       }
-      beacon.material.color.setHex(Math.sin(cloudT * 3) > 0 ? 0xff2a3c : 0x881122);
+      beacon.material.color.setHex(Math.sin(cloudT * 3) > 0 ? 0xff2a3c : 0xff5566);
     },
   };
 }

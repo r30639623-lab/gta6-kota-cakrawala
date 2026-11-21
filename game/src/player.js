@@ -1,5 +1,6 @@
 // player.js — Raka berjalan kaki: model low-poly, gerak WASD relatif
-// kamera, tabrakan lingkaran vs gedung, pukul (F) sebagai serangan dekat.
+// kamera, tabrakan lingkaran vs gedung, pukul (F) sebagai serangan dekat
+// dengan animasi lengan yang berayun.
 
 import * as THREE from 'three';
 import { resolveCircle } from './vehicles.js';
@@ -17,7 +18,10 @@ export function createPlayer(scene) {
   head.position.y = 2.2;
   head.castShadow = true;
   group.add(head);
-  const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.38, 0.16, 10), new THREE.MeshLambertMaterial({ color: 0xd21f2b }));
+  const cap = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.36, 0.38, 0.16, 10),
+    new THREE.MeshLambertMaterial({ color: 0xd21f2b })
+  );
   cap.position.y = 2.46;
   group.add(cap);
   const legL = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.85, 0.36), pants);

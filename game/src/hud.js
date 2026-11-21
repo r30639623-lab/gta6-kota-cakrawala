@@ -1,6 +1,8 @@
 // hud.js — HUD Kota Cakrawala: uang, nyawa, armor, Wanted, kecepatan,
 // jam, radio, tracker 12 misi, counter relik, distrik, minimap 2D
-// berlabel + kompas, banner, prompt konteks, dan layar menu/pause.
+// berlabel + kompas (waypoint, target job/balapan, polisi merah saat
+// Mata Elang aktif), banner, prompt konteks, HUD balapan, dan layar
+// menu/pause.
 
 import { MISSIONS, ACT_NAMES } from './missions.js';
 
@@ -19,6 +21,7 @@ export function createHud() {
   const relicsEl = el('hud-relics');
   const districtEl = el('hud-district');
   const compassEl = el('hud-compass');
+  const raceEl = el('hud-race');
   const minimap = el('hud-minimap');
   const mapCtx = minimap.getContext('2d');
   const menuOverlay = el('menu-overlay');
@@ -58,12 +61,10 @@ export function createHud() {
     const toMap = (x, z) => [95 + x * scale, 95 + z * scale];
     mapCtx.fillStyle = 'rgba(10,16,10,0.82)';
     mapCtx.fillRect(0, 0, W, H);
-    // Laut & pantai.
     mapCtx.fillStyle = '#1e6f8e';
     mapCtx.fillRect(0, toMap(0, 300)[1], W, H - toMap(0, 300)[1]);
     mapCtx.fillStyle = '#d9c28a';
     mapCtx.fillRect(0, toMap(0, 290)[1], W, toMap(0, 300)[1] - toMap(0, 290)[1]);
-    // Jalan.
     mapCtx.strokeStyle = '#5a6068';
     mapCtx.lineWidth = 3;
     for (const s of [-280, -200, -120, -40, 40, 120, 200, 280]) {
@@ -78,7 +79,6 @@ export function createHud() {
       mapCtx.lineTo(W, y1);
       mapCtx.stroke();
     }
-    // Label distrik.
     mapCtx.fillStyle = 'rgba(255,255,255,0.55)';
     mapCtx.font = '9px sans-serif';
     mapCtx.textAlign = 'center';
@@ -92,7 +92,6 @@ export function createHud() {
       const [mx, my] = toMap(x, z);
       mapCtx.fillText(name, mx, my - 8);
     }
-    // Landmark.
     const drawDot = (x, z, color, r = 3) => {
       const [mx, my] = toMap(x, z);
       mapCtx.fillStyle = color;
@@ -105,14 +104,12 @@ export function createHud() {
     drawDot(120, -120, '#ffffff'); // RS
     drawDot(-222, 252, '#2ec4b6'); // Bengkel
     drawDot(250, 360, '#ff9e57'); // Dermaga
-    // Garasi (G).
     mapCtx.fillStyle = '#2ee6ff';
     mapCtx.font = 'bold 10px sans-serif';
     for (const g of snap.garages || []) {
       const [mx, my] = toMap(g.x, g.z);
       mapCtx.fillText('G', mx, my + 3);
     }
-    // Relik yang belum diambil (titik emas kecil).
     if (snap.relicDots) {
       mapCtx.fillStyle = '#ffd23f';
       for (const [x, z] of snap.relicDots) {
@@ -120,21 +117,24 @@ export function createHud() {
         mapCtx.fillRect(mx - 1, my - 1, 2, 2);
       }
     }
-    // Target misi (cincin kuning berdenyut).
-    if (snap.missionTarget) {
-      const [mx, my] = toMap(snap.missionTarget.x, snap.missionTarget.z);
-      mapCtx.strokeStyle = '#ffd23f';
+    const ringTarget = (t, color) => {
+      if (!t) return;
+      const [mx, my] = toMap(t.x, t.z);
+      mapCtx.strokeStyle = color;
       mapCtx.lineWidth = 2;
       mapCtx.beginPath();
       mapCtx.arc(mx, my, 7 + Math.sin(performance.now() / 300) * 2, 0, Math.PI * 2);
       mapCtx.stroke();
-    }
-    // Polisi (titik biru) & helikopter (B).
-    mapCtx.fillStyle = '#4488ff';
+    };
+    ringTarget(snap.missionTarget, '#ffd23f');
+    ringTarget(snap.jobTarget, '#2ee6ff');
+    ringTarget(snap.raceTarget, '#ff9f43');
+    // Polisi: biru biasa, merah menyala saat Mata Elang aktif.
+    mapCtx.fillStyle = snap.reveal ? '#ff2222' : '#4488ff';
     for (const c of snap.policeCars || []) {
       const [mx, my] = toMap(c.x, c.z);
       mapCtx.beginPath();
-      mapCtx.arc(mx, my, 2.5, 0, Math.PI * 2);
+      mapCtx.arc(mx, my, snap.reveal ? 3.5 : 2.5, 0, Math.PI * 2);
       mapCtx.fill();
     }
     if (snap.heli) {
@@ -143,7 +143,23 @@ export function createHud() {
       mapCtx.font = 'bold 11px sans-serif';
       mapCtx.fillText('H', mx, my + 4);
     }
-    // Pemain (panah putih).
+    // Waypoint (garis kuning putus-putus + titik).
+    if (snap.waypoint) {
+      const [px, py] = toMap(snap.playerPos.x, snap.playerPos.z);
+      const [wx, wy] = toMap(snap.waypoint.x, snap.waypoint.z);
+      mapCtx.strokeStyle = '#ffd23f';
+      mapCtx.lineWidth = 1.5;
+      mapCtx.setLineDash([4, 3]);
+      mapCtx.beginPath();
+      mapCtx.moveTo(px, py);
+      mapCtx.lineTo(wx, wy);
+      mapCtx.stroke();
+      mapCtx.setLineDash([]);
+      mapCtx.fillStyle = '#ffd23f';
+      mapCtx.beginPath();
+      mapCtx.arc(wx, wy, 3, 0, Math.PI * 2);
+      mapCtx.fill();
+    }
     const [px, py] = toMap(snap.playerPos.x, snap.playerPos.z);
     mapCtx.save();
     mapCtx.translate(px, py);
@@ -156,7 +172,6 @@ export function createHud() {
     mapCtx.closePath();
     mapCtx.fill();
     mapCtx.restore();
-    // Batas pandang minimap.
     mapCtx.strokeStyle = 'rgba(255,255,255,0.35)';
     mapCtx.lineWidth = 1;
     mapCtx.strokeRect(0.5, 0.5, W - 1, H - 1);
@@ -183,7 +198,6 @@ export function createHud() {
       relicsEl.textContent = `◆ Relik ${snap.relicsFound}/${snap.relicsTotal}`;
       districtEl.textContent = `Distrik: ${snap.districtName} ★ ${snap.districtRep}`;
       compassEl.textContent = compass(snap.headingDeg);
-      // Tracker 12 misi.
       let html = '';
       for (const m of MISSIONS) {
         const done = snap.missionsDone.includes(m.id);
@@ -191,13 +205,33 @@ export function createHud() {
         const mark = done ? '✓' : active ? '►' : '○';
         html += `<div class="tracker-row${active ? ' active' : ''}${done ? ' done' : ''}">${mark} ${m.name} — $${m.reward}</div>`;
       }
+      if (snap.activeJob) {
+        html += `<div class="tracker-row active">◆ ${snap.activeJob.name} — $${snap.activeJob.reward}</div>`;
+      }
       trackerEl.innerHTML = html;
       drawMinimap(snap);
     },
     updateMissionBanner(active, timer) {
-      if (!active) return;
       const banner = el('hud-mission');
-      if (banner) banner.textContent = `${active.def.name} — ${fmtTime(timer)}`;
+      if (!banner) return;
+      if (!active) {
+        banner.style.display = 'none';
+        return;
+      }
+      banner.style.display = 'block';
+      banner.textContent = `${active.def.name} — ${fmtTime(timer)}`;
+    },
+    updateRace(active, timer) {
+      if (!active) {
+        raceEl.style.display = 'none';
+        return;
+      }
+      raceEl.style.display = 'block';
+      if (active.kind === 'race') {
+        raceEl.textContent = `🏁 ${active.def.name} — CP ${active.cpIndex}/${active.def.checkpoints.length} — ${fmtTime(timer)}`;
+      } else {
+        raceEl.textContent = `◆ ${active.def.name} — ${fmtTime(timer)}`;
+      }
     },
     showMenu(save, districts, act) {
       menuOverlay.style.display = 'flex';

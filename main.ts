@@ -1,10 +1,11 @@
-// main.ts — Kota Cakrawala round 7 (Node 22 stdlib-only).
+// main.ts — Kota Cakrawala round 8 rebuild (Node 22 stdlib-only).
 // Menyerahkan game ke make.fun: menyalin game/ dan screenshots/ dari
 // repo ini ke /output (atau $MAKEFUN_OUTPUT_DIR di luar grader), lalu
 // menulis /output/dossier.json dengan buildDossier dari
-// vendor/makefun-game.ts. Round 7: full rewrite — 12 misi 3 babak,
-// 20 relik, 10 mobil + 3 garasi, reputasi 5 distrik, Wanted ★1-5,
-// poles visual (bayangan, langit gradien, neon), screenshot seed 2.
+// vendor/makefun-game.ts. Round 8 rebuild: siang cerah yang ramai,
+// kru Bu Sari + ability aktif, panel dispatch polisi, HP in-game,
+// side job + balapan jalanan, dialog misi berwajah, 12 mobil,
+// senjata ke-4 Senapan, 12 misi 3 babak, 20 relik, 3 garasi.
 
 import { cpSync, mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -25,4 +26,4 @@ const dossier = buildDossier(outDir, {
   game_max_bytes: 50331648,
 });
 writeFileSync(join(outDir, 'dossier.json'), dossier);
-console.log(`Kota Cakrawala round 7: dossier written (${dossier.length} bytes) to ${outDir}/dossier.json`);
+console.log(`Kota Cakrawala round 8 rebuild: dossier written (${dossier.length} bytes) to ${outDir}/dossier.json`);

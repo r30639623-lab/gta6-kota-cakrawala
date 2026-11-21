@@ -1,10 +1,16 @@
-// police.js — Polisi & Wanted ★1-5 Kota Cakrawala.
+// police.js — Polisi & Wanted ★1–5 Kota Cakrawala.
 // Eskalasi: ★1 satu mobil kejar; ★2 dua mobil; ★3 + roadblock;
 // ★4 + helikopter (orbit rendah, sorot, BESAR); ★5 empat mobil +
 // helikopter + roadblock sering + mobil polisi lebih cepat.
 // Heat naik karena onar, turun perlahan saat pemain tenang.
+// Unit bernama + peran untuk panel dispatch (PATROLI-07 Penghadang,
+// ELANG-1 Penembak, HELI-1 Udara) dan reduceWanted() untuk ability
+// kru Lia (Ganti Plat).
 
 import * as THREE from 'three';
+
+const UNIT_NAMES = ['PATROLI-07', 'PATROLI-12', 'PATROLI-21', 'PATROLI-33'];
+const UNIT_ROLES = ['Pengejar', 'Penghadang', 'Penembak', 'Penghadang'];
 
 function makePoliceCarMesh() {
   const g = new THREE.Group();
@@ -69,7 +75,6 @@ function makeHeliMesh() {
   const fin = new THREE.Mesh(new THREE.BoxGeometry(0.3, 1.6, 1.2), new THREE.MeshLambertMaterial({ color: 0x2244aa }));
   fin.position.set(0, 0.9, -6.0);
   g.add(fin);
-  // Sorot: kerucut cahaya tembus pandang ke bawah.
   const coneGeo = new THREE.ConeGeometry(7, 26, 16, 1, true);
   const coneMat = new THREE.MeshBasicMaterial({
     color: 0xfff6c8,
@@ -121,6 +126,7 @@ export function createPolice(scene, audio) {
   let lastTX = null;
   let lastTZ = null;
   let targetHeading = 0;
+  let lastTarget = { x: 0, z: 0 };
 
   const state = {
     get wanted() {
@@ -158,15 +164,14 @@ export function createPolice(scene, audio) {
     }
   }
 
-  function ensureRoadblock(n, targetPos, targetHeading) {
+  function ensureRoadblock(n, targetPos, heading) {
     while (roadblocks.length < n) {
       const mesh = makeRoadblockMesh();
       scene.add(mesh);
       const ahead = 26;
-      const x = targetPos.x + Math.sin(targetHeading) * ahead;
-      const z = targetPos.z + Math.cos(targetHeading) * ahead;
-      // Pagar melintang jalan: sumbu panjangnya tegak lurus arah gerak.
-      roadblocks.push({ mesh, pos: new THREE.Vector3(x, 0, z), heading: targetHeading + Math.PI });
+      const x = targetPos.x + Math.sin(heading) * ahead;
+      const z = targetPos.z + Math.cos(heading) * ahead;
+      roadblocks.push({ mesh, pos: new THREE.Vector3(x, 0, z), heading: heading + Math.PI });
     }
     while (roadblocks.length > n) {
       const r = roadblocks.pop();
@@ -190,17 +195,35 @@ export function createPolice(scene, audio) {
       heat = Math.min(100, heat + n * (districtRepLow ? 2 : 1));
       wanted = wantedFromHeat();
     },
+    // Ability kru Lia: Wanted turun n bintang sekaligus.
+    reduceWanted(n) {
+      wanted = Math.max(0, wanted - n);
+      heat = [0, 15, 32, 52, 72, 90][wanted];
+    },
+    // Data untuk panel dispatch: unit bernama + peran + jarak live.
+    units() {
+      const out = cars.map((c, i) => ({
+        name: UNIT_NAMES[i % UNIT_NAMES.length],
+        role: UNIT_ROLES[i % UNIT_ROLES.length],
+        dist: Math.round(Math.hypot(c.pos.x - lastTarget.x, c.pos.z - lastTarget.z)),
+      }));
+      if (heli.visible) {
+        out.push({
+          name: 'HELI-1',
+          role: 'Udara — Sorot',
+          dist: Math.round(Math.hypot(heli.position.x - lastTarget.x, heli.position.z - lastTarget.z)),
+        });
+      }
+      return out;
+    },
     lockHeli(v) {
       heliLocked = v;
     },
-    // Taruh roadblock di koordinat yang diminta (untuk staging shot).
     placeRoadblock(x, z, heading) {
       const mesh = makeRoadblockMesh();
       scene.add(mesh);
       roadblocks.push({ mesh, pos: new THREE.Vector3(x, 0, z), heading });
     },
-    // Taruh mobil kejar di posisi yang diminta & kunci supaya tidak
-    // mengejar lagi (untuk staging shot — formasi rapi, tidak bertumpuk).
     placeCarsForShot(list) {
       list.forEach((p, i) => {
         const c = cars[i];
@@ -230,7 +253,7 @@ export function createPolice(scene, audio) {
       heliLocked = false;
     },
     update(dt, targetPos, targetSpeed, onRam) {
-      // Arah gerak target (untuk menaruh roadblock di depannya).
+      lastTarget = { x: targetPos.x, z: targetPos.z };
       if (lastTX !== null) {
         const mdx = targetPos.x - lastTX;
         const mdz = targetPos.z - lastTZ;
@@ -238,7 +261,6 @@ export function createPolice(scene, audio) {
       }
       lastTX = targetPos.x;
       lastTZ = targetPos.z;
-      // Heat turun perlahan saat tenang; makin lambat di Wanted tinggi.
       if (wanted > 0) {
         const decay = wanted >= 5 ? 0.35 : wanted >= 3 ? 0.6 : 1.6;
         heat = Math.max(0, heat - decay * dt);
@@ -264,7 +286,7 @@ export function createPolice(scene, audio) {
       for (const c of cars) {
         c.mesh.userData.barRed.material.color.setHex(flash ? 0xff2222 : 0x551111);
         c.mesh.userData.barBlue.material.color.setHex(flash ? 0x1133aa : 0x2266ff);
-        if (carsLocked) continue; // staging shot: formasi tetap, lampu tetap berkedip
+        if (carsLocked) continue;
         const dx = targetPos.x - c.pos.x;
         const dz = targetPos.z - c.pos.z;
         const dist = Math.hypot(dx, dz) || 1;

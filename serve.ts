@@ -1,10 +1,11 @@
-// serve.ts — Kota Cakrawala round 7: static file server (Node 22 stdlib only).
-// Serves the game/ folder next to this file so the game can be played and
-// screenshotted locally. Usage: node serve.ts [--port 8080].
-//  - "/" serves game/index.html.
-//  - Any path under game/ is served with the right MIME type.
-//  - Path traversal ("..") is refused with 403, a missing file with 404,
-//    a malformed URI with 400. Every request is logged in one short line.
+// serve.ts — Kota Cakrawala round 8 rebuild: server file statis
+// (Node 22 stdlib). Melayani folder game/ di sebelah file ini supaya
+// game bisa dimainkan dan di-screenshot secara lokal.
+// Cara pakai: node serve.ts [--port 8080].
+//  - "/" melayani game/index.html.
+//  - Path apa pun di bawah game/ dilayani dengan MIME yang tepat.
+//  - Traversal ("..") ditolak 403, file hilang 404, URI rusak 400.
+//    Setiap request dicatat dalam satu baris singkat.
 
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';

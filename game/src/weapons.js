@@ -1,6 +1,7 @@
 // weapons.js — Roda senjata radial Kota Cakrawala (tahan Q / Tab):
-// 1 Tinju (tanpa amunisi), 2 Pistol, 3 SMG (lebih cepat).
-// Serang dengan F / klik kiri. Amunisi diisi ulang di garasi ($50).
+// 1 Tinju (tanpa amunisi), 2 Pistol, 3 SMG (lebih cepat), 4 Senapan
+// (damage besar, jarak menengah). Serang dengan F / klik kiri.
+// Amunisi diisi ulang di garasi ($50).
 
 import * as THREE from 'three';
 
@@ -8,13 +9,13 @@ export const WEAPONS = [
   { id: 'fist', name: 'Tinju', damage: 15, rate: 0.45, ammo: null, range: 2.4 },
   { id: 'pistol', name: 'Pistol', damage: 34, rate: 0.35, ammo: 'pistol', range: 26 },
   { id: 'smg', name: 'SMG', damage: 18, rate: 0.09, ammo: 'smg', range: 22 },
+  { id: 'shotgun', name: 'Senapan', damage: 60, rate: 0.7, ammo: 'shotgun', range: 16 },
 ];
 
 export function createWeapons(scene, camera, save, audio, onHeat) {
   let current = 0;
   let cooldown = 0;
   let wheelOpen = false;
-  // Tracer tembakan: garis kuning singkat.
   const tracerMat = new THREE.LineBasicMaterial({ color: 0xffe97a, transparent: true, opacity: 0.9 });
   const tracerGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
   const tracer = new THREE.Line(tracerGeo, tracerMat);
@@ -70,7 +71,6 @@ export function createWeapons(scene, camera, save, audio, onHeat) {
       } else {
         if (audio) audio.click();
       }
-      // Kena target terdekat di depan dalam jangkauan & kerucut 25 derajat.
       let best = null;
       let bestD = w.range;
       const fx = Math.sin(heading);

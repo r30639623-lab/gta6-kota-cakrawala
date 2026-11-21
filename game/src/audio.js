@@ -1,7 +1,8 @@
-// audio.js — Semua suara Kota Cakrawala dibuat prosedural dengan WebAudio:
-// mesin, sirene, tabrakan, cash, gagal, tembakan, klakson. Tanpa file suara.
-// Aman di headless/tanpa interaksi: semua panggilan jadi no-op kalau
-// AudioContext tidak tersedia atau belum diizinkan.
+// audio.js — Semua efek suara Kota Cakrawala dibuat prosedural
+// dengan WebAudio (oscillator + noise): mesin, sirene, tabrakan, cash,
+// gagal, menang, tembakan, klakson, blip HP, denting ability kru.
+// Tanpa file suara sama sekali. Semua panggilan aman jadi no-op kalau
+// AudioContext belum diizinkan (headless / sebelum interaksi).
 
 export function createAudio() {
   let ctx = null;
@@ -45,7 +46,7 @@ export function createAudio() {
     }
   }
 
-  function noise(dur, vol = 0.25, low = 400) {
+  function burst(dur, vol = 0.25, cutoff = 400) {
     if (!ensure() || ctx.state === 'suspended') return;
     try {
       const len = Math.max(1, Math.floor(ctx.sampleRate * dur));
@@ -56,7 +57,7 @@ export function createAudio() {
       src.buffer = buf;
       const filter = ctx.createBiquadFilter();
       filter.type = 'lowpass';
-      filter.frequency.value = low;
+      filter.frequency.value = cutoff;
       const g = ctx.createGain();
       g.gain.value = vol;
       src.connect(filter);
@@ -72,7 +73,7 @@ export function createAudio() {
     resume() {
       if (ensure() && ctx.state === 'suspended') ctx.resume().catch(() => {});
     },
-    engine(speed01) {
+    engine(level01) {
       if (!ensure() || ctx.state === 'suspended') return;
       try {
         if (!engineOsc) {
@@ -88,8 +89,8 @@ export function createAudio() {
           engineGain.connect(master);
           engineOsc.start();
         }
-        engineOsc.frequency.setTargetAtTime(55 + speed01 * 165, ctx.currentTime, 0.08);
-        engineGain.gain.setTargetAtTime(0.02 + speed01 * 0.05, ctx.currentTime, 0.1);
+        engineOsc.frequency.setTargetAtTime(55 + level01 * 165, ctx.currentTime, 0.08);
+        engineGain.gain.setTargetAtTime(0.02 + level01 * 0.05, ctx.currentTime, 0.1);
       } catch {
         // abaikan
       }
@@ -113,7 +114,7 @@ export function createAudio() {
       }, 340);
     },
     crash() {
-      noise(0.25, 0.4, 900);
+      burst(0.25, 0.4, 900);
       tone(70, 0.2, 'square', 0.15, 40);
     },
     cash() {
@@ -127,7 +128,7 @@ export function createAudio() {
       [523, 659, 784, 1047].forEach((f, i) => setTimeout(() => tone(f, 0.18, 'triangle', 0.14), i * 110));
     },
     shoot() {
-      noise(0.08, 0.3, 2400);
+      burst(0.08, 0.3, 2400);
     },
     horn() {
       tone(370, 0.28, 'square', 0.1);
@@ -135,6 +136,13 @@ export function createAudio() {
     },
     click() {
       tone(900, 0.05, 'square', 0.08);
+    },
+    blip() {
+      tone(1100, 0.07, 'sine', 0.12);
+      setTimeout(() => tone(1400, 0.09, 'sine', 0.12), 70);
+    },
+    chime() {
+      [880, 1174, 1568].forEach((f, i) => setTimeout(() => tone(f, 0.16, 'triangle', 0.12), i * 80));
     },
   };
 }
